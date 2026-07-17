@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FLOORS } from '../data/stores.js'
+import { FLOORS, LANDMARKS } from '../data/stores.js'
 import { allStores, bestMeetingPoint, describeRoute, findStoreNode, floorLabelOf } from '../lib/routing.js'
 import { findProduct } from '../data/products.js'
+import { parseIntent } from '../services/intentParser.js'
 import Scanner from './Scanner.jsx'
 import { SendIcon } from './icons.jsx'
 
@@ -41,6 +42,37 @@ const getParking = () => {
 }
 const parkTime = (p) =>
   new Date(p.time).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+
+// Resolve an LLM-returned name against the real catalogue (landmarks first,
+// then stores). The parser's output is never trusted blindly — anything that
+// doesn't resolve here is treated as low confidence.
+const resolveNode = (name) => {
+  if (!name) return null
+  const q = name.trim().toLowerCase()
+  const lm = LANDMARKS.find((l) => l.name.toLowerCase() === q)
+  if (lm) return { id: `${lm.floor}:${lm.name}`, name: lm.name, floor: lm.floor }
+  return findStoreNode(name)
+}
+
+// Local fuzzy candidates for the "did you mean…" fallback.
+// Punctuation-insensitive so "levis" matches "LEVI'S".
+const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '')
+const suggestCandidates = (text) => {
+  const q = norm(text || '').trim()
+  if (!q) return []
+  return allStores()
+    .map((n) => {
+      const name = norm(n.name)
+      let score = 0
+      if (name.includes(q) || q.includes(name)) score += 2
+      for (const w of q.split(/\s+/)) if (w.length > 2 && name.includes(w)) score += 1
+      return [score, n]
+    })
+    .filter(([s]) => s > 0)
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, 3)
+    .map(([, n]) => n)
+}
 
 export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, onExpand }) {
   const [msgs, setMsgs] = useState([])
@@ -105,6 +137,12 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     ].filter(Boolean)
 
   const askOrigin = () => {
+    // if the intent parser already extracted the origin, skip the question
+    if (flow.current.originPreset) {
+      const preset = flow.current.originPreset
+      flow.current.originPreset = null
+      return giveRoute(preset)
+    }
     flow.current.phase = 'askOrigin'
     const opts = [...ORIGINS.map((o) => ({ id: `origin:${o.id}`, label: o.label }))]
     if (lastVisited && lastVisited !== flow.current.dest?.id) {
@@ -188,6 +226,15 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
 
     if (opt.id.startsWith('fme:')) {
       flow.current.me = opt.id.slice(4)
+      // friend's spot may already be known from the intent parser
+      if (flow.current.them) {
+        flow.current.phase = 'friendChoice'
+        botSay('Got both of you pinned. How do you want to do this?', [
+          { id: 'fgo', label: 'Route me to them' },
+          { id: 'fmeet', label: 'Meet in the middle ☕' },
+        ])
+        return
+      }
       flow.current.phase = 'friendThem'
       botSay(
         "And where's your friend hiding?",
@@ -328,20 +375,157 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     ], 400)
   }
 
-  const submitText = (e) => {
+  // Feed a parsed intent into the EXISTING state machine — this only pre-fills
+  // slots (dest / originPreset / them / parkLevel) and re-uses the same phases
+  // and handlers the chips drive. Returns false if nothing usable was extracted.
+  const applyIntent = (p) => {
+    const origin = resolveNode(p.origin)
+    const dest = resolveNode(p.destination)
+    const friendAt = resolveNode(p.friendLocation)
+
+    // low confidence, or names that didn't survive catalogue validation →
+    // disambiguate with the existing chip UI
+    if (p.confidence < 0.6 || p.intent === 'unknown') {
+      const cands = suggestCandidates(p.destination || p.origin || p.friendLocation)
+      if (cands.length) {
+        botSay(
+          "I'm not sure which place you mean. Did you mean:",
+          cands.map((n) => ({ id: `dest:${n.id}`, label: `${n.name} · ${short(n.floor)}` }))
+        )
+        return true
+      }
+      return false
+    }
+
+    switch (p.intent) {
+      case 'navigate': {
+        if (dest) {
+          flow.current.dest = dest
+          if (origin) flow.current.originPreset = origin.id
+          botSay(`${dest.name} — ${floorLabelOf(dest.floor)}. Let's get you there.`, [], 300)
+          setTimeout(askOrigin, 750)
+          return true
+        }
+        if (origin) {
+          flow.current.originPreset = origin.id
+          flow.current.phase = 'askCategory'
+          botSay(
+            `Got it — you're near ${origin.name}. Where do you want to go?`,
+            CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+          )
+          return true
+        }
+        return false
+      }
+      case 'store_search': {
+        const cat = CATEGORIES.find((c) => c.toLowerCase() === (p.category || '').toLowerCase())
+        if (!cat) return false
+        if (origin) flow.current.originPreset = origin.id
+        flow.current.phase = 'askStore'
+        const stores = allStores().filter((n) => n.category === cat).slice(0, 8)
+        botSay(
+          `Here's where ${cat.toLowerCase()} lives in Orion:`,
+          stores.map((n) => ({ id: `dest:${n.id}`, label: `${n.name} · ${short(n.floor)}` }))
+        )
+        return true
+      }
+      case 'friend': {
+        if (friendAt) flow.current.them = friendAt.id
+        if (friendAt && origin) {
+          flow.current.me = origin.id
+          flow.current.phase = 'friendChoice'
+          botSay(
+            `Got it — you're near ${origin.name}, they're at ${friendAt.name}. How do you want to do this?`,
+            [
+              { id: 'fgo', label: 'Route me to them' },
+              { id: 'fmeet', label: 'Meet in the middle ☕' },
+            ]
+          )
+          return true
+        }
+        flow.current.phase = 'friendMe'
+        botSay(
+          friendAt
+            ? `Your friend's at ${friendAt.name} 🤝 Where are YOU right now?`
+            : "Let's link you up 🤝 First — where are YOU right now?",
+          ORIGINS.map((o) => ({ id: `fme:${o.id}`, label: o.label }))
+        )
+        return true
+      }
+      case 'parking': {
+        const saved = getParking()
+        if (saved && !p.parkingLevel) {
+          botSay(
+            `Your car is at ${saved.level} · Zone ${saved.zone} — parked at ${parkTime(saved)}.\n\n1. Take any escalator down to Ground Floor.\n2. Exit via Mall Entry 2.\n3. Follow the ${saved.level} ramp signs — Zone ${saved.zone} is marked on the pillars. 🚗`,
+            [
+              { id: 'pclear', label: 'Got it — clear the pin' },
+              { id: 'minimize', label: 'Done' },
+            ],
+            500
+          )
+          return true
+        }
+        const lvl = ['P1', 'P2', 'P3'].find(
+          (l) => l.toLowerCase() === (p.parkingLevel || '').toLowerCase()
+        )
+        if (lvl) {
+          flow.current.parkLevel = lvl
+          botSay(
+            `Which zone on ${lvl}? (It’s painted on the pillars)`,
+            ['A', 'B', 'C', 'D'].map((z) => ({ id: `pzone:${z}`, label: `Zone ${z}` }))
+          )
+        } else {
+          flow.current.phase = 'parkLevel'
+          botSay(
+            'Smart move 🅿️ Which level did you park on?',
+            ['P1', 'P2', 'P3'].map((l) => ({ id: `plevel:${l}`, label: l }))
+          )
+        }
+        return true
+      }
+      case 'offers': {
+        const deals = FLOORS.flatMap((f) =>
+          f.stores
+            .filter((s) => s.discount)
+            .map((s) => ({ id: `dest:${f.id}:${s.name}`, label: `${s.name} −${s.discount}% · ${f.short}` }))
+        )
+        botSay("Tonight's live drops 🔥 — tap one and I'll route you there:", deals.slice(0, 8))
+        return true
+      }
+      default:
+        return false
+    }
+  }
+
+  const submitText = async (e) => {
     e.preventDefault()
     const text = input.trim()
     if (!text) return
     setInput('')
     push('user', text)
+    setOptions([])
+
+    // 1) LLM intent parser (server-side key, catalogue-validated output)
+    const parsed = await parseIntent(text)
+    if (parsed && applyIntent(parsed)) return
+
+    // 2) offline / no-key fallback: local substring match, unchanged behaviour
     const node = findStoreNode(text)
     if (node) {
       flow.current.dest = node
       botSay(`${node.name} — ${floorLabelOf(node.floor)}. Let's get you there.`, [], 350)
       setTimeout(askOrigin, 800)
     } else {
+      const cands = suggestCandidates(text)
+      if (cands.length) {
+        botSay(
+          "I'm not sure which place you mean. Did you mean:",
+          cands.map((n) => ({ id: `dest:${n.id}`, label: `${n.name} · ${short(n.floor)}` }))
+        )
+        return
+      }
       botSay(
-        "I'm running on pure mall-brain for now (no API key plugged in). Tap an option below, or type a store name like “Sephora”.",
+        "I didn't catch a place I know in that. Tap an option below, or try a store name like “Sephora”.",
         idleOptions()
       )
     }

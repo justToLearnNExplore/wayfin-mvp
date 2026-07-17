@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wayFin — Direction A · After Dark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Manrope:wght@300..800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --obsidian:#0B0A0F;
+    --obsidian-2:#131118;
+    --ivory:#F5EFE4;
+    --champagne:#C9A227;
+    --champagne-soft:#D8B65C;
+    --magenta:#E84A8A;
+    --cyan:#38C7D8;
+    --violet:#7C5CFF;
+    --amber:#F2A03D;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:#000;
+    display:flex;justify-content:center;align-items:center;
+    font-family:'Manrope',sans-serif;
+  }
+  .phone{
+    width:390px;height:844px;position:relative;overflow:hidden;
+    background:var(--obsidian);
+    color:var(--ivory);
+  }
+  /* ambient constellation dots */
+  .stars{position:absolute;inset:0;overflow:hidden}
+  .stars i{position:absolute;width:2px;height:2px;border-radius:50%;background:var(--champagne);opacity:.35;animation:twinkle 4s ease-in-out infinite}
+  @keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.5}}
+
+  /* gold atrium ring */
+  .ring{
+    position:absolute;top:88px;left:50%;transform:translateX(-50%);
+    width:300px;height:300px;border-radius:50%;
+    border:1px solid rgba(201,162,39,.5);
+    animation:ringIn 1.4s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .ring::after{
+    content:"";position:absolute;inset:22px;border-radius:50%;
+    border:1px dashed rgba(201,162,39,.25);
+  }
+  @keyframes ringIn{from{transform:translateX(-50%) scale(.6);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+
+  .eyebrow{
+    position:absolute;top:56px;width:100%;text-align:center;
+    font-size:10px;letter-spacing:.42em;font-weight:600;
+    color:var(--champagne-soft);
+    animation:riseIn .9s .2s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .wordmark{
+    position:absolute;top:112px;width:100%;text-align:center;
+    font-family:'Fraunces',serif;font-weight:390;font-size:64px;letter-spacing:-.01em;
+    animation:riseIn 1s .35s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .wordmark em{font-style:italic;color:var(--champagne-soft)}
+  .tagline{
+    position:absolute;top:196px;width:100%;text-align:center;
+    font-size:13px;font-weight:400;color:rgba(245,239,228,.66);letter-spacing:.02em;
+    animation:riseIn 1s .5s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes riseIn{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+  /* faceted walker */
+  .walker{
+    position:absolute;top:170px;left:50%;transform:translateX(-53%);
+    animation:riseIn 1.2s .55s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .walker polygon{opacity:0;animation:facet .7s cubic-bezier(.2,.8,.2,1) forwards}
+  @keyframes facet{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .path-line{
+    position:absolute;top:472px;left:0;width:100%;text-align:center;
+  }
+  .path-line svg{overflow:visible}
+  .path-line .dash{
+    stroke:var(--champagne);stroke-width:1.4;stroke-dasharray:2 7;fill:none;opacity:.65;
+    animation:pathDraw 2.4s 1s ease-out both;
+  }
+  @keyframes pathDraw{from{stroke-dashoffset:220;opacity:0}to{stroke-dashoffset:0;opacity:.65}}
+  .pin{animation:riseIn .6s 2.2s cubic-bezier(.2,.8,.2,1) both}
+
+  /* chat sheet — bottom half */
+  .sheet{
+    position:absolute;left:10px;right:10px;bottom:10px;height:388px;
+    background:linear-gradient(180deg,rgba(23,20,30,.92),rgba(13,11,18,.96));
+    border:1px solid rgba(201,162,39,.35);
+    border-radius:26px;
+    backdrop-filter:blur(14px);
+    padding:20px 18px;
+    animation:sheetUp 1s .9s cubic-bezier(.2,.9,.25,1) both;
+    display:flex;flex-direction:column;gap:14px;
+  }
+  @keyframes sheetUp{from{transform:translateY(110%)}to{transform:translateY(0)}}
+  .sheet-head{display:flex;align-items:center;gap:10px}
+  .bot-gem{
+    width:34px;height:34px;flex:0 0 34px;border-radius:11px;
+    background:conic-gradient(from 210deg,var(--violet),var(--magenta),var(--amber),var(--cyan),var(--violet));
+    clip-path:polygon(50% 0,100% 28%,88% 100%,12% 100%,0 28%);
+    animation:gemSpin 7s linear infinite;
+  }
+  @keyframes gemSpin{to{filter:hue-rotate(360deg)}}
+  .sheet-head .name{font-family:'Fraunces',serif;font-size:17px}
+  .sheet-head .status{font-size:10.5px;color:var(--champagne-soft);letter-spacing:.18em;font-weight:600}
+  .bubble{
+    background:rgba(245,239,228,.06);
+    border:1px solid rgba(245,239,228,.1);
+    border-radius:4px 18px 18px 18px;
+    padding:13px 15px;font-size:13.5px;line-height:1.55;color:rgba(245,239,228,.92);
+    animation:riseIn .6s 1.5s both;
+  }
+  .bubble b{color:var(--champagne-soft);font-weight:700}
+  .chips{display:grid;grid-template-columns:1fr 1fr;gap:9px;animation:riseIn .6s 1.75s both}
+  .chip{
+    border:1px solid rgba(201,162,39,.4);border-radius:14px;
+    padding:13px 12px;font-size:12.5px;font-weight:600;color:var(--ivory);
+    background:rgba(201,162,39,.05);
+    display:flex;align-items:center;gap:8px;cursor:pointer;
+    transition:all .2s;
+  }
+  .chip svg{flex:0 0 16px}
+  .chip:active{background:rgba(201,162,39,.18)}
+  .chip.hot{grid-column:span 2;background:linear-gradient(90deg,rgba(124,92,255,.16),rgba(232,74,138,.16));border-color:rgba(232,74,138,.45)}
+  .field{
+    margin-top:auto;display:flex;align-items:center;gap:10px;
+    border:1px solid rgba(245,239,228,.14);border-radius:16px;padding:12px 15px;
+    font-size:12.5px;color:rgba(245,239,228,.4);
+    animation:riseIn .6s 2s both;
+  }
+  .field .send{margin-left:auto;color:var(--champagne-soft)}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001s!important;animation-delay:0s!important}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="stars">
+    <i style="top:8%;left:12%"></i><i style="top:15%;left:78%;animation-delay:1s"></i>
+    <i style="top:30%;left:88%;animation-delay:2s"></i><i style="top:44%;left:6%;animation-delay:.5s"></i>
+    <i style="top:25%;left:30%;animation-delay:1.6s"></i><i style="top:38%;left:60%;animation-delay:2.4s"></i>
+  </div>
+
+  <div class="ring"></div>
+  <p class="eyebrow">ORION MALL · BRIGADE GATEWAY</p>
+  <h1 class="wordmark">way<em>Fin</em></h1>
+  <p class="tagline">The mall, already figured out.</p>
+
+  <!-- faceted triangular walker -->
+  <svg class="walker" width="230" height="290" viewBox="0 0 200 250">
+    <!-- head -->
+    <polygon points="95,20 115,25 108,45" fill="#F2A03D" style="animation-delay:.7s"/>
+    <polygon points="95,20 108,45 88,42" fill="#E84A8A" style="animation-delay:.78s"/>
+    <polygon points="95,20 88,42 80,30" fill="#7C5CFF" style="animation-delay:.86s"/>
+    <!-- neck -->
+    <polygon points="98,45 108,45 103,56" fill="#D8B65C" style="animation-delay:.9s"/>
+    <!-- torso -->
+    <polygon points="85,60 115,55 105,100" fill="#7C5CFF" style="animation-delay:.95s"/>
+    <polygon points="85,60 105,100 80,105" fill="#38C7D8" style="animation-delay:1.02s"/>
+    <polygon points="115,55 120,95 105,100" fill="#E84A8A" style="animation-delay:1.09s"/>
+    <polygon points="80,105 105,100 95,140" fill="#E84A8A" style="animation-delay:1.16s"/>
+    <polygon points="105,100 120,95 112,135" fill="#F2A03D" style="animation-delay:1.2s"/>
+    <polygon points="95,140 105,100 112,135" fill="#7C5CFF" style="animation-delay:1.26s"/>
+    <!-- back arm -->
+    <polygon points="88,62 96,63 84,95" fill="#2A9DAB" style="animation-delay:1.3s"/>
+    <!-- front arm + bag -->
+    <polygon points="112,60 122,62 118,86" fill="#F2A03D" style="animation-delay:1.34s"/>
+    <polygon points="118,86 126,84 124,110" fill="#E84A8A" style="animation-delay:1.4s"/>
+    <polygon points="116,112 138,112 134,148" fill="#C9A227" style="animation-delay:1.48s"/>
+    <polygon points="116,112 134,148 112,146" fill="#8f741c" style="animation-delay:1.52s"/>
+    <!-- front leg -->
+    <polygon points="95,140 112,135 125,175" fill="#38C7D8" style="animation-delay:1.56s"/>
+    <polygon points="118,168 128,172 136,206" fill="#7C5CFF" style="animation-delay:1.62s"/>
+    <polygon points="128,200 148,207 130,213" fill="#E84A8A" style="animation-delay:1.68s"/>
+    <!-- back leg -->
+    <polygon points="95,140 106,142 78,180" fill="#E84A8A" style="animation-delay:1.6s"/>
+    <polygon points="78,180 88,182 70,216" fill="#F2A03D" style="animation-delay:1.66s"/>
+    <polygon points="56,213 76,216 70,223" fill="#38C7D8" style="animation-delay:1.72s"/>
+  </svg>
+
+  <!-- dotted route to a destination pin -->
+  <div class="path-line">
+    <svg width="330" height="46" viewBox="0 0 330 46">
+      <path class="dash" d="M30,38 C110,10 200,44 290,16"/>
+      <g class="pin">
+        <circle cx="290" cy="16" r="4.5" fill="#C9A227"/>
+        <circle cx="290" cy="16" r="9" fill="none" stroke="#C9A227" stroke-opacity=".4"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- chatbot sheet -->
+  <div class="sheet">
+    <div class="sheet-head">
+      <div class="bot-gem"></div>
+      <div>
+        <div class="name">wayFin</div>
+        <div class="status">ONLINE · G FLOOR</div>
+      </div>
+    </div>
+    <div class="bubble">Good evening ✨ You're at <b>Mall Entry 2, Ground Floor</b>. Where are we headed?</div>
+    <div class="chips">
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" stroke-width="2"><path d="M9 20l-5.5-2.5v-13L9 7m0 13l6-3m-6 3V7m6 10l5.5 2.5v-13L15 4m0 13V4M9 7l6-3"/></svg>
+        Explore stores
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38C7D8" stroke-width="2"><circle cx="9" cy="7" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 11l2 2 4-4"/></svg>
+        Find a friend
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E84A8A" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>
+        Scan a price
+      </div>
+      <div class="chip">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="2"><path d="M5 17h14M6 17l1.5-6h9L18 17M9 11V8a3 3 0 0 1 6 0v3"/><circle cx="7.5" cy="19" r="1.5"/><circle cx="16.5" cy="19" r="1.5"/></svg>
+        Save my parking
+      </div>
+      <div class="chip hot">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E84A8A" stroke-width="2"><path d="M12 2l2.4 7.2H22l-6 4.6 2.3 7.2-6.3-4.5-6.3 4.5L8 13.8 2 9.2h7.6z"/></svg>
+        Tonight's top drops — LEVI'S 50% off
+      </div>
+    </div>
+    <div class="field">Ask wayFin anything…<span class="send">➤</span></div>
+  </div>
+</div>
+</body>
+</html>

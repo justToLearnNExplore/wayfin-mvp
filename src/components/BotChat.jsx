@@ -29,6 +29,8 @@ const FRIEND_SPOTS = [
   { id: 'F3:HAMLEYS', label: 'HAMLEYS · 3rd' },
 ]
 
+const BIRTHDAY_DRESS_STORES = ['NEW ME', 'H&M', 'MANGO', 'ONLY', 'WESTSIDE']
+
 const short = (floorId) => FLOORS.find((f) => f.id === floorId)?.short ?? floorId
 
 let msgSeq = 0
@@ -564,6 +566,15 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.originPreset = parkingOrigin.id
       botSay(`${mentionedDestination.name} — ${floorLabelOf(mentionedDestination.floor)}. Let's get you there.`, [], 350)
       setTimeout(askOrigin, 800)
+      return
+    }
+    if (/birthday|party/.test(text.toLowerCase()) && /dress|outfit|clothes|fashion/.test(text.toLowerCase())) {
+      const picks = BIRTHDAY_DRESS_STORES.map((name) => findStoreNode(name)).filter(Boolean)
+      botSay(
+        'I found a birthday-dress shortlist. Pick a store and I’ll route you there:',
+        picks.map((store) => ({ id: `dest:${store.id}`, label: `${store.name} · ${short(store.floor)}` })),
+        350
+      )
       return
     }
     const node = findStoreNode(text)

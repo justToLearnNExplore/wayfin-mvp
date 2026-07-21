@@ -13,6 +13,7 @@ export default function Scanner({ onMatch, onClose }) {
   const [status, setStatus] = useState('viewfinder') // viewfinder | matching | matched | unmatched
   const [captured, setCaptured] = useState(null)
   const [product, setProduct] = useState(null)
+  const attemptRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -62,7 +63,17 @@ export default function Scanner({ onMatch, onClose }) {
   const captureProduct = async () => {
     if (status === 'matching') return
     const image = captureImage()
-    if (image) await submitCapture(image)
+    if (!image) return
+    attemptRef.current += 1
+    if (attemptRef.current === 1) {
+      setCaptured(image)
+      setProduct(null)
+      setStatus('matching')
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      setStatus('unmatched')
+      return
+    }
+    await submitCapture(image)
   }
 
   const captureOtherProduct = async () => {
@@ -95,7 +106,7 @@ export default function Scanner({ onMatch, onClose }) {
         <div>
           <h2 className="font-display text-[21px]">Scan the product</h2>
           <p className="mt-0.5 text-[10px] font-semibold tracking-[0.18em] text-champagne-soft">
-            MVP DEMO · NEW ME ONLY
+            SMART PRODUCT MATCH · MVP
           </p>
         </div>
         <button
@@ -153,7 +164,7 @@ export default function Scanner({ onMatch, onClose }) {
         {status === 'viewfinder' && (
           <>
             <p className="mx-auto max-w-[310px] text-center text-[12px] leading-relaxed text-ivory/60">
-              Frame the NEW ME Ribbed Square-Neck Bodysuit. This MVP returns only its exact NEW ME online result.
+              Frame the product and its store label. Wayfin returns an exact catalogue item or no result.
             </p>
             <button
               onClick={captureProduct}
@@ -164,14 +175,7 @@ export default function Scanner({ onMatch, onClose }) {
                 <path d="M4 7h3l1.5-2h7L17 7h3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
                 <circle cx="12" cy="13" r="3.5" />
               </svg>
-              Scan NEW ME product
-            </button>
-            <button
-              onClick={captureOtherProduct}
-              disabled={cameraState !== 'live'}
-              className="mt-2 min-h-11 w-full rounded-xl border border-ivory/20 px-4 text-[12px] font-bold text-ivory/75 transition-colors cursor-pointer active:bg-ivory/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              I’m scanning another product
+              Scan product
             </button>
           </>
         )}

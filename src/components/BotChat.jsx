@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores.js'
 import { allStores, bestMeetingPoint, describeRoute, findStoreNode, floorLabelOf } from '../lib/routing.js'
-import { findProduct } from '../data/products.js'
+import { findProductById } from '../data/products.js'
 import { parseIntent } from '../services/intentParser.js'
+import { matchProductImage } from '../services/productMatcher.js'
 import Scanner from './Scanner.jsx'
 import { SendIcon } from './icons.jsx'
 
@@ -360,7 +361,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
     // ---- price scan ----
     if (opt.id === 'scan') {
-      botSay('Point your camera at the barcode on the tag 📷', [], 250)
+      botSay('For this MVP, scan the NEW ME Ribbed Square-Neck Bodysuit. I’ll return only NEW ME’s exact online price and sizes.', [], 250)
       setTimeout(() => setScanning(true), 550)
       return
     }
@@ -414,28 +415,9 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     }
   }
 
-  const handleScan = (code) => {
-    setScanning(false)
-    const p = findProduct(code)
-    const fmt = (n) => `₹${n.toLocaleString('en-IN')}`
-    if (!p) {
-      botSay(
-        `Hmm, barcode ${code} isn't in my demo catalogue yet. Try a demo product?`,
-        [{ id: 'scan', label: 'Scan again' }, ...idleOptions(true)]
-      )
-      return
-    }
-    const diff = p.storePrice - p.onlinePrice
-    const header = `${p.name} — ${p.brand}, size ${p.size}\nIn-store: ${fmt(p.storePrice)} · Online: ${fmt(p.onlinePrice)}`
-    const verdict =
-      diff > 0
-        ? `\n\n💸 It's ${fmt(diff)} cheaper on ${p.brand}'s own site right now.`
-        : `\n\n✅ The rack price beats online — grab it here. Other sizes online: ${p.otherSizes.join(', ')}.`
-    botSay(header + verdict, [
-      { id: 'link', label: `Open ${p.brand} online ↗`, href: p.url },
-      { id: 'scan', label: 'Scan another' },
-      { id: 'minimize', label: 'Done' },
-    ], 400)
+  const handleProductMatch = async (image) => {
+    const productId = await matchProductImage(image)
+    return findProductById(productId)
   }
 
   // Feed a parsed intent into the EXISTING state machine — this only pre-fills
@@ -679,7 +661,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         </button>
       </form>
 
-      {scanning && <Scanner onResult={handleScan} onClose={() => setScanning(false)} />}
+      {scanning && <Scanner onMatch={handleProductMatch} onClose={() => setScanning(false)} />}
     </>
   )
 }

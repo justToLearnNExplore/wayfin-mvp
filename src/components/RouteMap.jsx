@@ -32,10 +32,14 @@ const floorNodes = (floorId) => [
 
 const floorIndexOf = (id) => FLOOR_RAIL.indexOf(id)
 
-function Block({ node, labelled }) {
+function Block({ node, labelled, state = 'default', onSelect }) {
   const h = hash(node.name)
   const isAtrium = node.type === 'atrium'
   const isZone = node.type === 'zone'
+  const isCurrent = state === 'current'
+  const isNext = state === 'next'
+  const isDestination = state === 'destination'
+  const isSelected = state === 'selected'
   const w = isAtrium ? 66 : isZone ? 96 : 58 + (h % 5) * 12
   const d = isAtrium ? 66 : isZone ? 78 : 42 + ((h >> 3) % 4) * 11
   const z = isAtrium ? 24 : 12 + ((h >> 5) % 3) * 5
@@ -43,9 +47,11 @@ function Block({ node, labelled }) {
     ? 'polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%)'
     : CUTS[(h >> 7) % 4]
   const p = pt(node)
+  const Wrapper = onSelect ? 'button' : 'div'
   return (
-    <div
-      className="absolute"
+    <Wrapper
+      {...(onSelect ? { type: 'button', onClick: onSelect, 'aria-label': `Inspect ${node.name}` } : {})}
+      className={`absolute ${onSelect ? 'cursor-pointer border-0 bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan/80' : ''}`}
       style={{
         left: p.x - w / 2,
         top: p.y - d / 2,
@@ -70,10 +76,23 @@ function Block({ node, labelled }) {
         style={{
           transform: `translateZ(${z}px)`,
           clipPath: clip,
-          background: isAtrium
-            ? 'linear-gradient(135deg,#1c1824,#100d16)'
-            : 'linear-gradient(145deg,#17141d,#0e0c13)',
-          border: '1px solid rgba(201,162,39,.30)',
+          background: isSelected
+            ? 'linear-gradient(145deg,#3b1c3b,#1b0d20)'
+            : isCurrent
+            ? 'linear-gradient(145deg,#15323a,#0d1b20)'
+            : isNext || isDestination
+              ? 'linear-gradient(145deg,#332917,#16100a)'
+              : isAtrium
+                ? 'linear-gradient(135deg,#1c1824,#100d16)'
+                : 'linear-gradient(145deg,#17141d,#0e0c13)',
+          border: `1px solid ${isSelected ? 'rgba(232,74,138,.9)' : isCurrent ? 'rgba(56,199,216,.85)' : isNext || isDestination ? 'rgba(216,182,92,.9)' : 'rgba(201,162,39,.30)'}`,
+          boxShadow: isSelected
+            ? '0 0 20px rgba(232,74,138,.28)'
+            : isCurrent
+            ? '0 0 20px rgba(56,199,216,.25)'
+            : isNext || isDestination
+              ? '0 0 18px rgba(216,182,92,.18)'
+              : undefined,
         }}
       >
         {labelled && (
@@ -85,16 +104,24 @@ function Block({ node, labelled }) {
           </span>
         )}
       </div>
-    </div>
+    </Wrapper>
   )
 }
 
 export default function RouteMap({ route, onClose }) {
   const guidance = route.guidance ?? []
   const [stepIdx, setStepIdx] = useState(0)
+  const [selectedStore, setSelectedStore] = useState(null)
+  const [confirmedLandmark, setConfirmedLandmark] = useState(null)
   const g = guidance[Math.min(stepIdx, guidance.length - 1)] ?? {}
   const anchor = route.path.find((n) => n.id === g.to) ?? route.dest
   const floorId = g.kind === 'escalator' || g.kind === 'lift' ? g.toFloor : g.floor ?? anchor.floor
+  const activeNode = route.path.find((n) => n.id === g.from) ?? route.path[0]
+  const activePathIndex = route.path.findIndex((n) => n.id === activeNode.id)
+  const nextNode = route.path.slice(activePathIndex + 1).find((n) => n.floor === floorId) ?? null
+  const positionNode = activeNode.floor === floorId ? activeNode : anchor
+  const manualPosition = confirmedLandmark?.floor === floorId ? confirmedLandmark : null
+  const currentPosition = manualPosition ?? positionNode
   const prevFloor = useRef(floorId)
   const dir = floorIndexOf(floorId) <= floorIndexOf(prevFloor.current) ? 1 : -1
   useEffect(() => { prevFloor.current = floorId }, [floorId])
@@ -104,12 +131,33 @@ export default function RouteMap({ route, onClose }) {
   const points = floorPath.map(pt)
   const pathD = points.length > 1 ? `M ${points.map((p) => `${p.x} ${p.y}`).join(' L ')}` : ''
 
-  // nodes worth labelling: on the route, or structural
+  // Route stops, structural points, and a compact nearby set remain legible on mobile.
   const onRoute = new Set(route.path.map((n) => n.name))
-  const labelled = (n) => onRoute.has(n.name) || n.type !== 'store'
+  const nearbyStoreNames = new Set(
+    floorNodes(floorId)
+      .filter((n) => n.type === 'store')
+      .sort((a, b) => Math.hypot(a.x - currentPosition.x, a.y - currentPosition.y) - Math.hypot(b.x - currentPosition.x, b.y - currentPosition.y))
+      .slice(0, 4)
+      .map((n) => n.name)
+  )
+  const labelled = (n) => onRoute.has(n.name) || nearbyStoreNames.has(n.name) || n.type !== 'store'
+  const blockState = (n) => {
+    if (n.name === selectedStore?.name && selectedStore.floor === floorId) return 'selected'
+    if (n.name === currentPosition.name) return 'current'
+    if (n.name === route.dest.name && route.dest.floor === floorId) return 'destination'
+    if (n.name === nextNode?.name) return 'next'
+    return 'default'
+  }
 
-  // camera pan → keep the active anchor near centre
-  const ap = pt(anchor)
+  // Camera pan follows the user and the next visible store, not the final
+  // destination. That keeps the GTA-style context above the route sheet.
+  const focusNode = nextNode ?? currentPosition
+  const currentPoint = pt(currentPosition)
+  const focusPoint = pt(focusNode)
+  const ap = {
+    x: (currentPoint.x + focusPoint.x) / 2,
+    y: (currentPoint.y + focusPoint.y) / 2,
+  }
   const panX = 190 - ap.x
   const panY = 320 - ap.y
 
@@ -139,7 +187,6 @@ export default function RouteMap({ route, onClose }) {
   }, [rz, rx])
 
   const destOnFloor = route.dest.floor === floorId
-  const startOnFloor = route.path[0].floor === floorId
 
   // outgoing bearing at the anchor, for the turn arrow
   const turnAngle = useMemo(() => {
@@ -241,6 +288,8 @@ export default function RouteMap({ route, onClose }) {
                     key={`${node.type}-${node.name}`}
                     node={node}
                     labelled={labelled(node) && !(destOnFloor && node.name === route.dest.name)}
+                    state={blockState(node)}
+                    onSelect={node.type === 'store' ? () => setSelectedStore({ ...node, floor: floorId }) : undefined}
                   />
                 ))}
 
@@ -248,7 +297,7 @@ export default function RouteMap({ route, onClose }) {
                 <svg
                   viewBox={`0 0 ${PLANE_W} ${PLANE_H}`}
                   className="absolute inset-0 overflow-visible"
-                  style={{ transform: 'translateZ(28px)' }}
+                  style={{ transform: 'translateZ(28px)', pointerEvents: 'none' }}
                 >
                   {pathD && (
                     <>
@@ -264,12 +313,13 @@ export default function RouteMap({ route, onClose }) {
                       />
                     </>
                   )}
-                  {startOnFloor && (
-                    <g transform={`translate(${pt(route.path[0]).x} ${pt(route.path[0]).y})`}>
+                  {currentPosition.floor === floorId && (
+                    <g transform={`translate(${pt(currentPosition).x} ${pt(currentPosition).y})`}>
                       <circle r="16" fill="#38C7D8" fillOpacity=".12">
                         <animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite" />
                       </circle>
                       <circle r="7" fill="#38C7D8" />
+                      <text y="-22" textAnchor="middle" fill="#8BE8F0" fontSize="10" fontWeight="800" letterSpacing="1.5">YOU</text>
                     </g>
                   )}
                   {destOnFloor && (
@@ -294,6 +344,39 @@ export default function RouteMap({ route, onClose }) {
             </AnimatePresence>
           </motion.div>
         </motion.div>
+
+        <div className="pointer-events-none absolute left-4 top-3 z-20 max-w-[155px] rounded-xl border border-ivory/15 bg-obsidian/80 px-3 py-2.5 shadow-xl backdrop-blur-md">
+          <p className="text-[9px] font-bold tracking-[0.2em] text-cyan">{manualPosition ? 'LANDMARK SET' : 'YOU ARE HERE'}</p>
+          <p className="mt-0.5 truncate text-[12px] font-bold text-ivory">{currentPosition.name}</p>
+          {nextNode && <p className="mt-1 text-[10px] text-ivory/55">Next · <span className="font-semibold text-champagne-soft">{nextNode.name}</span></p>}
+        </div>
+
+        {selectedStore?.floor === floorId && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="absolute left-4 top-[92px] z-30 w-[180px] rounded-xl border border-champagne/40 bg-obsidian-2/95 p-3 shadow-2xl backdrop-blur-xl"
+          >
+            <p className="text-[9px] font-bold tracking-[0.18em] text-champagne-soft">STORE SELECTED</p>
+            <p className="mt-1 font-display text-[18px] leading-tight text-ivory">{selectedStore.name}</p>
+            <p className="mt-1 text-[10px] leading-snug text-ivory/55">Use this only after you can see the store sign.</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => { setConfirmedLandmark(selectedStore); setSelectedStore(null) }}
+                className="flex min-h-11 flex-1 items-center justify-center rounded-lg border border-cyan/50 bg-cyan/10 px-2 text-[10px] font-extrabold text-cyan cursor-pointer active:bg-cyan/20"
+              >
+                Set landmark
+              </button>
+              <button
+                onClick={() => setSelectedStore(null)}
+                aria-label="Close selected store"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-ivory/15 text-ivory/65 cursor-pointer"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* floor rail */}
         <div className="route-map-floor-strip absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
@@ -355,7 +438,11 @@ export default function RouteMap({ route, onClose }) {
           </svg>
           <p className="font-display flex-1 text-[16.5px] leading-snug text-ivory/90">{g.text}</p>
           <button
-            onClick={() => (last ? onClose() : setStepIdx((i) => i + 1))}
+            onClick={() => {
+              setConfirmedLandmark(null)
+              setSelectedStore(null)
+              last ? onClose() : setStepIdx((i) => i + 1)
+            }}
             className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-champagne/60 bg-champagne/10 px-4 text-[12.5px] font-extrabold tracking-wide text-champagne-soft cursor-pointer active:bg-champagne/25"
           >
             {last ? 'DONE' : 'NEXT'}
@@ -364,6 +451,7 @@ export default function RouteMap({ route, onClose }) {
             </svg>
           </button>
         </div>
+
       </motion.div>
 
       <style>{`@keyframes routeflow { to { stroke-dashoffset: -16; } }`}</style>

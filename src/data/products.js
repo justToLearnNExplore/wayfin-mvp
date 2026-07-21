@@ -1,10 +1,10 @@
-// Seeded product DB for the price-compare demo.
-// Real barcode scans match on `barcode`; the scanner also offers these as
-// one-tap demo products so the flow never blocks a live demo.
+// Store-approved product catalogue for the visual-match demo.
+// A vision response may return only an `id` from this list. Prices, sizes, and
+// links always come from this catalogue — never from the vision model.
 
 export const PRODUCTS = [
   {
-    barcode: '8904368706519',
+    id: 'newme-ribbed-square-neck-bodysuit',
     brand: 'NEWME',
     store: 'NEW ME',
     name: 'Ribbed Square-Neck Bodysuit',
@@ -13,9 +13,10 @@ export const PRODUCTS = [
     onlinePrice: 499,
     url: 'https://newme.asia',
     otherSizes: ['S', 'L'],
+    visualDescriptor: 'a fitted ribbed bodysuit with a square neckline',
   },
   {
-    barcode: '8904310415862',
+    id: 'levis-511-slim-fit-jeans',
     brand: "Levi's",
     store: "LEVI'S",
     name: '511 Slim Fit Jeans',
@@ -24,9 +25,10 @@ export const PRODUCTS = [
     onlinePrice: 2639,
     url: 'https://www.levi.in',
     otherSizes: ['30', '34', '36'],
+    visualDescriptor: 'Levi’s 511 slim-fit denim jeans with a classic five-pocket cut',
   },
   {
-    barcode: '4550182305128',
+    id: 'uniqlo-airism-oversized-t-shirt',
     brand: 'UNIQLO',
     store: 'UNIQLO',
     name: 'AIRism Cotton Oversized T-Shirt',
@@ -35,8 +37,12 @@ export const PRODUCTS = [
     onlinePrice: 1290,
     url: 'https://www.uniqlo.com/in',
     otherSizes: ['S', 'M', 'XL', 'XXL'],
+    visualDescriptor: 'a UNIQLO AIRism cotton oversized crew-neck T-shirt',
   },
 ]
 
-export const findProduct = (barcode) =>
-  PRODUCTS.find((p) => p.barcode === barcode) ?? null
+export const findProductById = (id) => PRODUCTS.find((p) => p.id === id) ?? null
+
+// The build-challenge walkthrough demonstrates one real store-scoped item.
+// Keep this explicit so the MVP never pretends to recognise arbitrary goods.
+export const MVP_DEMO_PRODUCT_ID = 'newme-ribbed-square-neck-bodysuit'

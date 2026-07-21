@@ -1,83 +1,174 @@
-import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion, useMotionValue, useSpring } from 'framer-motion'
 import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores.js'
 import { floorLabelOf } from '../lib/routing.js'
 
-const floorNodes = (floorId) => [
-  ...(FLOORS.find((floor) => floor.id === floorId)?.stores ?? []).map((store) => ({ ...store, type: 'store' })),
-  ...LANDMARKS.filter((landmark) => landmark.floor === floorId),
-  ...PARKING_NODES.filter((node) => node.floor === floorId),
+// ---------- premium 3D mall world (After Dark) ----------
+// A tilted extruded-block mall rendered in CSS 3D. The camera follows the
+// active guidance step, the phone's gyroscope adds parallax, and the bottom
+// sheet mirrors the deterministic narrator one step at a time.
+
+const PLANE_W = 380
+const PLANE_H = 560
+const pt = (node) => ({ x: 26 + node.x * 3.28, y: 30 + node.y * 5.0 })
+
+const FLOOR_RAIL = ['F3', 'F2', 'F1', 'UG', 'G', 'P1', 'P2', 'P3']
+
+const hash = (s) => [...s].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7)
+
+// angular top-face silhouettes, GTA-map style
+const CUTS = [
+  'polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px)',
+  'polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%)',
+  'polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%)',
+  'polygon(0 0, 100% 0, 100% 100%, 16px 100%, 0 calc(100% - 16px))',
 ]
 
-const point = (node) => ({ x: 28 + node.x * 2.84, y: 38 + node.y * 4.08 })
-const isParkingFloor = (floorId) => PARKING_LEVELS.some((level) => level.id === floorId)
+const floorNodes = (floorId) => [
+  ...(FLOORS.find((f) => f.id === floorId)?.stores ?? []).map((s) => ({ ...s, type: 'store' })),
+  ...LANDMARKS.filter((l) => l.floor === floorId),
+  ...PARKING_NODES.filter((n) => n.floor === floorId),
+]
 
-const guidanceIndexForFloor = (guidance, floorId, preferLast = false) => {
-  const onFloor = guidance
-    .map((item, index) => ({ item, index }))
-    .filter(({ item }) => item.floor === floorId)
-  const walking = onFloor.filter(({ item }) => item.kind === 'walk')
-  const candidates = walking.length ? walking : onFloor
-  if (!candidates.length) return 0
-  return preferLast ? candidates[candidates.length - 1].index : candidates[0].index
-}
+const floorIndexOf = (id) => FLOOR_RAIL.indexOf(id)
 
-function RouteGlyph({ node, accent = '#D8B65C' }) {
-  const { x, y } = point(node)
+function Block({ node, labelled }) {
+  const h = hash(node.name)
+  const isAtrium = node.type === 'atrium'
+  const isZone = node.type === 'zone'
+  const w = isAtrium ? 66 : isZone ? 96 : 58 + (h % 5) * 12
+  const d = isAtrium ? 66 : isZone ? 78 : 42 + ((h >> 3) % 4) * 11
+  const z = isAtrium ? 24 : 12 + ((h >> 5) % 3) * 5
+  const clip = isAtrium
+    ? 'polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%)'
+    : CUTS[(h >> 7) % 4]
+  const p = pt(node)
   return (
-    <g transform={`translate(${x} ${y})`}>
-      <circle r="5" fill="#0B0A0F" stroke={accent} strokeWidth="1.6" />
-      <circle r="1.8" fill={accent} />
-    </g>
+    <div
+      className="absolute"
+      style={{
+        left: p.x - w / 2,
+        top: p.y - d / 2,
+        width: w,
+        height: d,
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      {/* plinth / side illusion */}
+      <div
+        className="absolute"
+        style={{
+          inset: -2,
+          clipPath: clip,
+          background: '#07060a',
+          boxShadow: '0 10px 24px rgba(0,0,0,.65)',
+        }}
+      />
+      {/* top face */}
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{
+          transform: `translateZ(${z}px)`,
+          clipPath: clip,
+          background: isAtrium
+            ? 'linear-gradient(135deg,#1c1824,#100d16)'
+            : 'linear-gradient(145deg,#17141d,#0e0c13)',
+          border: '1px solid rgba(201,162,39,.30)',
+        }}
+      >
+        {labelled && (
+          <span
+            className="px-1 text-center font-bold text-ivory/70"
+            style={{ fontSize: 8.5, letterSpacing: '.14em' }}
+          >
+            {node.name.toUpperCase()}
+          </span>
+        )}
+      </div>
+    </div>
   )
 }
 
 export default function RouteMap({ route, onClose }) {
-  const routeFloors = [...new Set(route.path.map((node) => node.floor))]
-  const isParkingRoute = route.path.some((node) => isParkingFloor(node.floor))
   const guidance = route.guidance ?? []
-  const initialFloor = isParkingFloor(route.dest.floor) ? route.dest.floor : route.path[0]?.floor ?? route.dest.floor
-  const [floorId, setFloorId] = useState(initialFloor)
-  const [guidanceIndex, setGuidanceIndex] = useState(() =>
-    guidanceIndexForFloor(guidance, initialFloor, isParkingFloor(route.dest.floor))
-  )
-  const activeGuidance = guidance[guidanceIndex]
-  const nextGuidance = guidance[guidanceIndex + 1]
-  const visibleFloors = isParkingFloor(floorId) ? PARKING_LEVELS : FLOORS
-  const floorPath = useMemo(() => {
-    if (!activeGuidance?.from || !activeGuidance?.to) {
-      return route.path.filter((node) => node.floor === floorId)
-    }
-    const from = route.path.findIndex((node) => node.id === activeGuidance.from)
-    const to = route.path.findIndex((node) => node.id === activeGuidance.to)
-    if (from < 0 || to < 0) return route.path.filter((node) => node.floor === floorId)
-    return route.path.slice(Math.min(from, to), Math.max(from, to) + 1).filter((node) => node.floor === floorId)
-  }, [activeGuidance, floorId, route.path])
-  const points = floorPath.map(point)
+  const [stepIdx, setStepIdx] = useState(0)
+  const g = guidance[Math.min(stepIdx, guidance.length - 1)] ?? {}
+  const anchor = route.path.find((n) => n.id === g.to) ?? route.dest
+  const floorId = g.kind === 'escalator' || g.kind === 'lift' ? g.toFloor : g.floor ?? anchor.floor
+  const prevFloor = useRef(floorId)
+  const dir = floorIndexOf(floorId) <= floorIndexOf(prevFloor.current) ? 1 : -1
+  useEffect(() => { prevFloor.current = floorId }, [floorId])
+
+  const routeFloors = [...new Set(route.path.map((n) => n.floor))]
+  const floorPath = useMemo(() => route.path.filter((n) => n.floor === floorId), [route.path, floorId])
+  const points = floorPath.map(pt)
   const pathD = points.length > 1 ? `M ${points.map((p) => `${p.x} ${p.y}`).join(' L ')}` : ''
-  const start = route.path[0]
-  const isDestinationFloor = floorId === route.dest.floor
-  const mapInstruction = activeGuidance?.text ?? route.steps.find((step) => step.includes(floorLabelOf(floorId))) ?? route.steps[1] ?? route.steps[0]
-  const heading = points.length > 1
-    ? points[points.length - 1].x > points[0].x + 3 ? 'HEADING RIGHT' : points[points.length - 1].x < points[0].x - 3 ? 'HEADING LEFT' : 'STRAIGHT AHEAD'
-    : activeGuidance?.kind === 'lift' ? 'LIFT TRANSFER' : 'ROUTE LOCKED'
 
-  const selectFloor = (nextFloor) => {
-    setFloorId(nextFloor)
-    setGuidanceIndex(guidanceIndexForFloor(guidance, nextFloor, nextFloor === route.dest.floor))
+  // nodes worth labelling: on the route, or structural
+  const onRoute = new Set(route.path.map((n) => n.name))
+  const labelled = (n) => onRoute.has(n.name) || n.type !== 'store'
+
+  // camera pan → keep the active anchor near centre
+  const ap = pt(anchor)
+  const panX = 190 - ap.x
+  const panY = 320 - ap.y
+
+  // gyro parallax + drag peek
+  const rz = useMotionValue(0)
+  const rx = useMotionValue(0)
+  const srz = useSpring(rz, { stiffness: 60, damping: 14 })
+  const srx = useSpring(rx, { stiffness: 60, damping: 14 })
+  useEffect(() => {
+    const onOrient = (e) => {
+      if (e.gamma == null) return
+      rz.set(Math.max(-6, Math.min(6, e.gamma / 7)))
+      rx.set(Math.max(-4, Math.min(4, (e.beta - 40) / 12)))
+    }
+    window.addEventListener('deviceorientation', onOrient)
+    // iOS needs a user-gesture permission request
+    const askIOS = () => {
+      if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission)
+        DeviceOrientationEvent.requestPermission().catch(() => {})
+      window.removeEventListener('pointerdown', askIOS)
+    }
+    window.addEventListener('pointerdown', askIOS, { once: true })
+    return () => {
+      window.removeEventListener('deviceorientation', onOrient)
+      window.removeEventListener('pointerdown', askIOS)
+    }
+  }, [rz, rx])
+
+  const destOnFloor = route.dest.floor === floorId
+  const startOnFloor = route.path[0].floor === floorId
+
+  // outgoing bearing at the anchor, for the turn arrow
+  const turnAngle = useMemo(() => {
+    const i = route.path.findIndex((n) => n.id === anchor.id)
+    const next = route.path.slice(i + 1).find((n) => n.floor === anchor.floor)
+    if (!next) return null
+    const a = pt(anchor)
+    const b = pt(next)
+    return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI + 90
+  }, [route.path, anchor])
+
+  const last = stepIdx >= guidance.length - 1
+
+  const stepIcon = () => {
+    const t = (g.text || '').toLowerCase()
+    if (g.kind === 'lift' || g.kind === 'escalator')
+      return <path d="M12 3v18M6 9l6-6 6 6M6 15l6 6 6-6" />
+    if (g.kind === 'arrival') return <path d="M12 2l2.5 7h7L16 13.5 18 21l-6-4.5L6 21l2-7.5L2.5 9h7z" />
+    if (t.includes('left')) return <path d="M20 18v-6a4 4 0 0 0-4-4H4M9 3L4 8l5 5" />
+    if (t.includes('right')) return <path d="M4 18v-6a4 4 0 0 1 4-4h12M15 3l5 5-5 5" />
+    return <path d="M12 20V4M6 10l6-6 6 6" />
   }
 
-  const advanceGuidance = () => {
-    if (!nextGuidance) return
-    setGuidanceIndex((index) => index + 1)
-    if (nextGuidance.floor && nextGuidance.floor !== floorId) setFloorId(nextGuidance.floor)
+  const jumpToFloor = (fid) => {
+    const idx = guidance.findIndex(
+      (s) => (s.kind === 'escalator' || s.kind === 'lift' ? s.toFloor : s.floor) === fid
+    )
+    if (idx >= 0) setStepIdx(idx)
   }
-
-  const nextActionLabel = activeGuidance?.kind === 'lift' || activeGuidance?.kind === 'escalator'
-    ? `Show ${floorLabelOf(activeGuidance.toFloor)}`
-    : activeGuidance?.kind === 'walk'
-      ? `At ${route.path.find((node) => node.id === activeGuidance.to)?.name ?? 'next point'}`
-      : 'Next direction'
 
   return (
     <motion.section
@@ -88,46 +179,194 @@ export default function RouteMap({ route, onClose }) {
       aria-label={`Visual route to ${route.dest.name}`}
       className="route-map absolute inset-0 z-50 flex flex-col overflow-hidden bg-obsidian text-ivory"
     >
-      <div className="pointer-events-none absolute inset-0 opacity-40" style={{ background: 'radial-gradient(circle at 48% 46%, rgba(56,199,216,.18), transparent 30%), radial-gradient(circle at 76% 22%, rgba(201,162,39,.16), transparent 27%)' }} />
-      <div className="pointer-events-none absolute inset-0 opacity-[.12]" style={{ backgroundImage: 'repeating-linear-gradient(0deg, transparent 0 3px, rgba(56,199,216,.35) 4px)', backgroundSize: '100% 5px' }} />
-      <header className="route-map-header relative z-10 shrink-0 px-5 pt-6">
-        <div>
-          <p className="text-[10px] font-semibold tracking-[0.32em] text-champagne-soft">AR GUIDANCE · ROUTE LOCKED</p>
-          <h2 className="font-display mt-1 text-[27px]">way<em className="text-champagne-soft">Fin</em></h2>
-        </div>
+      {/* header */}
+      <header className="route-map-header relative z-20 shrink-0 pt-7 text-center">
+        <h2 className="font-display text-[30px] leading-none">
+          way<em className="italic text-champagne-soft">Fin</em>
+        </h2>
+        <p className="mt-1 text-[9.5px] font-semibold tracking-[0.32em] text-ivory/55">
+          ORION MALL · BRIGADE GATEWAY
+        </p>
+        <button
+          onClick={onClose}
+          aria-label="Back to chat"
+          className="absolute right-4 top-6 flex h-10 w-10 items-center justify-center rounded-full border border-ivory/15 text-ivory/60 cursor-pointer"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
       </header>
 
-      <div className="route-map-floor-strip relative z-20 mt-2 flex shrink-0 items-center justify-center gap-1.5 px-3">
-        {visibleFloors.map((floor) => {
-          const active = floor.id === floorId
-          const onRoute = routeFloors.includes(floor.id)
-          return <button key={floor.id} onClick={() => selectFloor(floor.id)} disabled={!onRoute} aria-current={active ? 'true' : undefined} className={`flex h-9 w-9 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${active ? 'min-h-11 min-w-11 border-champagne bg-champagne/20 text-champagne-soft cursor-pointer' : onRoute ? 'min-h-11 min-w-11 border-cyan/50 bg-cyan/10 text-cyan cursor-pointer' : 'border-ivory/10 bg-obsidian-2/40 text-ivory/25 cursor-not-allowed'}`} aria-label={`${floor.label}${onRoute ? '' : ', not on this route'}`}>{floor.short}</button>
-        })}
+      {/* 3D viewport */}
+      <div className="route-map-canvas relative z-10 min-h-0 flex-1" style={{ perspective: 950 }}>
+        <motion.div
+          className="absolute left-1/2 top-1/2 h-0 w-0"
+          style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}
+        >
+          <motion.div
+            className="absolute"
+            style={{
+              width: PLANE_W,
+              height: PLANE_H,
+              transform: 'rotateX(52deg) rotateZ(-10deg)',
+              transformStyle: 'preserve-3d',
+            }}
+          >
+            <AnimatePresence mode="popLayout" custom={dir}>
+              <motion.div
+                key={floorId}
+                initial={{ opacity: 0, z: dir * -60 }}
+                animate={{ opacity: 1, z: 0, x: panX - PLANE_W / 2, y: panY - PLANE_H / 2 }}
+                exit={{ opacity: 0, z: dir * 60 }}
+                transition={{ duration: 0.6, ease: [0.25, 0.9, 0.3, 1] }}
+                className="absolute inset-0"
+                style={{ transformStyle: 'preserve-3d' }}
+              >
+                {/* floor plate */}
+                <div
+                  className="absolute rounded-[40px]"
+                  style={{
+                    inset: -48,
+                    background:
+                      'radial-gradient(80% 70% at 50% 42%, #14111a 0%, #0B0A0F 78%)',
+                    border: '1px solid rgba(201,162,39,.16)',
+                    backgroundImage:
+                      'repeating-linear-gradient(90deg, rgba(201,162,39,.05) 0 1px, transparent 1px 46px), repeating-linear-gradient(0deg, rgba(201,162,39,.05) 0 1px, transparent 1px 46px)',
+                  }}
+                />
+
+                {floorNodes(floorId).map((node) => (
+                  <Block
+                    key={`${node.type}-${node.name}`}
+                    node={node}
+                    labelled={labelled(node) && !(destOnFloor && node.name === route.dest.name)}
+                  />
+                ))}
+
+                {/* route */}
+                <svg
+                  viewBox={`0 0 ${PLANE_W} ${PLANE_H}`}
+                  className="absolute inset-0 overflow-visible"
+                  style={{ transform: 'translateZ(28px)' }}
+                >
+                  {pathD && (
+                    <>
+                      <path d={pathD} fill="none" stroke="#C9A227" strokeWidth="9" strokeOpacity=".14" strokeLinecap="round" />
+                      <path
+                        d={pathD}
+                        fill="none"
+                        stroke="#E8C96A"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeDasharray="7 9"
+                        style={{ filter: 'drop-shadow(0 0 6px rgba(216,182,92,.9))', animation: 'routeflow 1.2s linear infinite' }}
+                      />
+                    </>
+                  )}
+                  {startOnFloor && (
+                    <g transform={`translate(${pt(route.path[0]).x} ${pt(route.path[0]).y})`}>
+                      <circle r="16" fill="#38C7D8" fillOpacity=".12">
+                        <animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite" />
+                      </circle>
+                      <circle r="7" fill="#38C7D8" />
+                    </g>
+                  )}
+                  {destOnFloor && (
+                    <g transform={`translate(${pt(route.dest).x} ${pt(route.dest).y})`}>
+                      <circle r="17" fill="none" stroke="#D8B65C" strokeOpacity=".55">
+                        <animate attributeName="r" values="12;20;12" dur="2s" repeatCount="indefinite" />
+                      </circle>
+                      <circle r="9" fill="none" stroke="#D8B65C" strokeWidth="1.5" />
+                      <circle r="4.5" fill="#F4E3AE" />
+                      <text y="-24" textAnchor="middle" fill="#F5EFE4" fontSize="11" fontWeight="800" letterSpacing="1.5">
+                        {route.dest.name}
+                      </text>
+                    </g>
+                  )}
+                  {turnAngle != null && !last && (
+                    <g transform={`translate(${ap.x} ${ap.y}) rotate(${turnAngle})`}>
+                      <polygon points="0,-16 11,6 0,0 -11,6" fill="#F2C14E" style={{ filter: 'drop-shadow(0 0 8px rgba(242,193,78,.9))' }} />
+                    </g>
+                  )}
+                </svg>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+        </motion.div>
+
+        {/* floor rail */}
+        <div className="route-map-floor-strip absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
+          {FLOOR_RAIL.filter((id) => !id.startsWith('P') || routeFloors.includes(id)).map((id) => {
+            const meta =
+              FLOORS.find((f) => f.id === id) ?? PARKING_LEVELS.find((l) => l.id === id)
+            const active = id === floorId
+            const on = routeFloors.includes(id)
+            return (
+              <button
+                key={id}
+                onClick={() => on && jumpToFloor(id)}
+                disabled={!on}
+                aria-current={active ? 'true' : undefined}
+                aria-label={floorLabelOf(id)}
+                className={`flex h-10 w-10 items-center justify-center rounded-full border text-[11px] font-bold transition-colors ${
+                  active
+                    ? 'border-champagne bg-champagne/20 text-champagne-soft cursor-pointer'
+                    : on
+                      ? 'border-ivory/25 text-ivory/70 cursor-pointer'
+                      : 'border-ivory/10 text-ivory/25 cursor-not-allowed'
+                }`}
+              >
+                {meta?.short ?? id}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
-      <div className="route-map-canvas relative z-10 mx-3 mt-2 min-h-0 flex-1">
-      <svg viewBox="0 0 340 500" preserveAspectRatio="xMidYMid meet" className="h-full w-full" role="img" aria-label={`${floorLabelOf(floorId)} route map`}>
-        <defs>
-          <filter id="routeGlow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        </defs>
-        <rect x="13" y="16" width="314" height="468" rx="28" fill="#131118" stroke="#C9A227" strokeOpacity=".24" />
-        <path d="M28 92V34h58M312 92V34h-58M28 408v58h58M312 408v58h-58" fill="none" stroke="#38C7D8" strokeOpacity=".48" strokeWidth="1.5" />
-        <path d="M170 29v448M28 250h284" stroke="#38C7D8" strokeOpacity=".09" strokeDasharray="3 8" />
-        {floorNodes(floorId).map((node) => { const p = point(node); return <rect key={`${node.type}-${node.name}`} x={p.x - 12} y={p.y - 8} width="24" height="16" rx="3" fill="#0B0A0F" stroke="#F5EFE4" strokeOpacity=".12" /> })}
-        {floorNodes(floorId).filter((node) => node.name === route.dest.name || node.name === 'Atrium 1' || node.name === 'Atrium 2' || node.name === 'Parking Lift' || (isParkingRoute && node.type === 'zone')).map((node) => { const p = point(node); return <text key={`label-${node.name}`} x={p.x} y={p.y - 12} textAnchor="middle" fill="#F5EFE4" fillOpacity=".78" fontSize="7" fontWeight="700">{node.name}</text> })}
-        {pathD && <motion.path d={pathD} fill="none" stroke="#C9A227" strokeWidth="7" strokeOpacity=".18" strokeLinecap="round" />}
-        {pathD && <motion.path d={pathD} fill="none" stroke="#D8B65C" strokeWidth="2.4" strokeLinecap="round" strokeDasharray="4 7" filter="url(#routeGlow)" initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, ease: 'easeOut' }} />}
-        {points.length > 1 && <motion.polygon points="0,-7 13,0 0,7" fill="#D8B65C" filter="url(#routeGlow)" initial={{ opacity: 0 }} animate={{ opacity: [0, 1, 0] }} transition={{ delay: 0.75, duration: 1.1, repeat: Infinity }} style={{ transformBox: 'fill-box', transformOrigin: 'center' }} transform={`translate(${points[Math.max(1, points.length - 2)].x} ${points[Math.max(1, points.length - 2)].y})`} />}
-        {floorPath.map((node) => <RouteGlyph key={node.id} node={node} />)}
-        {floorId === start.floor && <g transform={`translate(${point(start).x} ${point(start).y})`}><circle r="12" fill="#38C7D8" fillOpacity=".16" /><circle r="6" fill="#38C7D8" /><text x="0" y="22" textAnchor="middle" fill="#38C7D8" fontSize="7" fontWeight="700">YOU</text></g>}
-        {isDestinationFloor && <g transform={`translate(${point(route.dest).x} ${point(route.dest).y})`}><circle r="13" fill="none" stroke="#D8B65C" strokeWidth="1" opacity=".7" /><circle r="7" fill="#C9A227" /><circle r="2" fill="#0B0A0F" /></g>}
-      </svg>
-      </div>
-
-      <motion.div initial={{ y: 36, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.12, duration: 0.34, ease: 'easeOut' }} className="route-map-sheet relative z-20 mx-3 mb-3 mt-2 shrink-0 rounded-[26px] border border-champagne/35 bg-obsidian-2/95 p-4 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold tracking-[.22em] text-champagne-soft">{activeGuidance ? `STEP ${activeGuidance.step} · ` : ''}{floorLabelOf(floorId).toUpperCase()} · {heading}</p><h3 className="font-display mt-1 text-[26px] leading-none">{route.dest.name}</h3><p className="mt-1.5 text-[13px] text-ivory/75"><span className="font-semibold text-champagne-soft">{route.metres} m</span> · about {route.minutes} min</p></div><div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-champagne/40 bg-champagne/10 text-champagne-soft"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" /></svg></div></div>
-        <div className="mt-3 border-t border-ivory/10 pt-3"><p className="text-[13px] leading-snug text-ivory/90">{mapInstruction}</p>{nextGuidance && <button onClick={advanceGuidance} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-cyan/40 bg-cyan/10 px-4 text-[12px] font-semibold text-cyan transition-colors cursor-pointer active:bg-cyan/20">{nextActionLabel}</button>}<button onClick={onClose} className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl border border-ivory/20 bg-ivory/5 px-4 text-[12px] font-semibold text-ivory transition-colors cursor-pointer active:bg-ivory/15" aria-label="Back to wayFin chat">Back to chat</button></div>
+      {/* bottom sheet */}
+      <motion.div
+        initial={{ y: 36, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.12, duration: 0.34, ease: 'easeOut' }}
+        className="route-map-sheet relative z-20 mx-3 mb-3 mt-2 shrink-0 rounded-[26px] border border-champagne/35 bg-obsidian-2/95 p-5 backdrop-blur-xl"
+      >
+        <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-champagne/50" />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-display text-[32px] leading-none text-champagne-soft">{route.dest.name}</h3>
+            <p className="mt-1.5 text-[13.5px] text-ivory/75">
+              <span className="font-bold text-champagne-soft">{route.metres} m</span> · about {route.minutes} min
+            </p>
+          </div>
+          <div
+            className="mt-1 h-9 w-9 shrink-0"
+            style={{
+              background: 'conic-gradient(from 210deg,#7C5CFF,#E84A8A,#F2A03D,#38C7D8,#7C5CFF)',
+              clipPath: 'polygon(50% 0,100% 28%,88% 100%,12% 100%,0 28%)',
+              borderRadius: 10,
+              opacity: 0.9,
+            }}
+          />
+        </div>
+        <div className="mt-3 flex items-center gap-3 border-t border-ivory/10 pt-3">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" strokeWidth="2" className="shrink-0" aria-hidden="true">
+            {stepIcon()}
+          </svg>
+          <p className="font-display flex-1 text-[16.5px] leading-snug text-ivory/90">{g.text}</p>
+          <button
+            onClick={() => (last ? onClose() : setStepIdx((i) => i + 1))}
+            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-champagne/60 bg-champagne/10 px-4 text-[12.5px] font-extrabold tracking-wide text-champagne-soft cursor-pointer active:bg-champagne/25"
+          >
+            {last ? 'DONE' : 'NEXT'}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
       </motion.div>
+
+      <style>{`@keyframes routeflow { to { stroke-dashoffset: -16; } }`}</style>
     </motion.section>
   )
 }

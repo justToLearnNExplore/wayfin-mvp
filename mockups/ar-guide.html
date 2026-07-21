@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>wayFin — AR Guide mockup · GTA mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Manrope:wght@300..800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --obsidian:#0B0A0F; --obsidian2:#131118; --ivory:#F5EFE4;
+    --champagne:#C9A227; --champagne-soft:#D8B65C;
+    --magenta:#E84A8A; --cyan:#38C7D8; --violet:#7C5CFF; --amber:#F2A03D;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Manrope',sans-serif}
+  .phone{width:390px;height:844px;position:relative;overflow:hidden;background:var(--obsidian);color:var(--ivory)}
+
+  /* ---------- stylized corridor world ---------- */
+  .scene{position:absolute;inset:0;perspective:520px;perspective-origin:50% 38%;transform-style:preserve-3d}
+  .ground{
+    position:absolute;bottom:-60px;left:-55%;width:210%;height:760px;
+    transform-origin:50% 100%;transform:rotateX(63deg);transform-style:preserve-3d;
+    background:
+      repeating-linear-gradient(90deg, rgba(201,162,39,.10) 0 1px, transparent 1px 64px),
+      repeating-linear-gradient(0deg, rgba(201,162,39,.14) 0 1px, transparent 1px 74px),
+      linear-gradient(180deg,#17141d 0%,#0B0A0F 90%);
+  }
+  /* storefront slabs on each side */
+  .shop{position:absolute;width:150px;height:64px;background:#141119;border:1px solid rgba(201,162,39,.28);border-radius:8px;
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;letter-spacing:.12em;color:rgba(245,239,228,.55)}
+  .ground .shop{transform:rotateX(-90deg);transform-origin:center bottom}
+  /* route ribbon on the ground */
+  .ribbon{
+    position:absolute;bottom:0;left:50%;width:120px;height:100%;transform:translateX(-50%);
+    background:
+      repeating-linear-gradient(0deg, rgba(11,10,15,0) 0 34px, rgba(11,10,15,.55) 34px 40px),
+      linear-gradient(90deg, rgba(232,74,138,.65), rgba(216,182,92,.95) 18%, rgba(216,182,92,.95) 82%, rgba(56,199,216,.65));
+    box-shadow:0 0 34px rgba(216,182,92,.5);
+    animation:flow 1.6s linear infinite;
+  }
+  @keyframes flow{to{background-position:0 74px,0 0}}
+
+  /* marching faceted chevrons (in screen space, scaled toward vanishing point) */
+  .chev{position:absolute;left:50%;z-index:3;filter:drop-shadow(0 0 18px rgba(216,182,92,.9));animation:march 2.4s cubic-bezier(.3,.6,.4,1) infinite}
+  .chev svg{display:block}
+  .chev:nth-child(1){animation-delay:0s}
+  .chev:nth-child(2){animation-delay:.8s}
+  .chev:nth-child(3){animation-delay:1.6s}
+  @keyframes march{
+    0%{transform:translate(-50%,0) scale(1.35);opacity:0;top:84%}
+    12%{opacity:1}
+    72%{opacity:1}
+    100%{transform:translate(-50%,0) scale(.16);opacity:0;top:53%}
+  }
+
+  /* destination beacon at the vanishing point */
+  .beacon{position:absolute;left:50%;top:37.5%;transform:translateX(-50%);width:56px;height:130px;pointer-events:none;z-index:2}
+  .beacon .pillar{position:absolute;inset:0 16px;background:linear-gradient(180deg,rgba(216,182,92,0),rgba(216,182,92,.6) 45%,rgba(216,182,92,.95));filter:blur(5px);animation:pulse 2.2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.55}}
+  .beacon .gem{position:absolute;top:-8px;left:50%;width:34px;height:34px;transform:translateX(-50%);
+    background:conic-gradient(from 210deg,var(--violet),var(--magenta),var(--amber),var(--cyan),var(--violet));
+    clip-path:polygon(50% 0,100% 28%,88% 100%,12% 100%,0 28%);border-radius:8px;
+    animation:spinhue 6s linear infinite}
+  @keyframes spinhue{to{filter:hue-rotate(360deg)}}
+
+  /* scanline + vignette AR treatment */
+  .fx{position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(0,0,0,.55)),
+      repeating-linear-gradient(0deg, transparent 0 3px, rgba(56,199,216,.05) 4px 5px)}
+
+  /* ---------- HUD ---------- */
+  .mission{position:absolute;top:0;left:0;right:0;padding:52px 20px 0;z-index:5}
+  .mission .eyebrow{font-size:10px;font-weight:700;letter-spacing:.34em;color:var(--champagne-soft)}
+  .mission h1{font-family:'Fraunces',serif;font-weight:420;font-size:34px;display:flex;align-items:baseline;gap:12px}
+  .mission h1 .dist{font-family:'Manrope';font-size:16px;font-weight:800;color:var(--cyan);font-variant-numeric:tabular-nums}
+  .step{
+    margin-top:10px;display:inline-flex;align-items:center;gap:8px;
+    background:rgba(19,17,24,.82);border:1px solid rgba(201,162,39,.4);border-radius:12px;
+    padding:9px 13px;font-size:12.5px;font-weight:600;backdrop-filter:blur(8px);
+    animation:missionIn .6s cubic-bezier(.2,.9,.3,1) both .3s}
+  @keyframes missionIn{from{transform:translateY(-14px);opacity:0}to{transform:none;opacity:1}}
+  .step svg{flex:0 0 14px}
+
+  /* GTA radar */
+  .radar{position:absolute;left:14px;bottom:14px;width:128px;height:128px;z-index:5}
+  .radar .disc{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#16131c 0%,#0B0A0F 78%);border:1.5px solid rgba(201,162,39,.55);box-shadow:0 6px 24px rgba(0,0,0,.6), inset 0 0 20px rgba(201,162,39,.12);overflow:hidden}
+  .radar .sweep{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg, rgba(56,199,216,.28), transparent 18%);animation:sweep 3.4s linear infinite}
+  @keyframes sweep{to{transform:rotate(360deg)}}
+  .radar .ticks{position:absolute;inset:6px;border-radius:50%;border:1px dashed rgba(245,239,228,.14)}
+  .radar svg{position:absolute;inset:0}
+  .radar .n{position:absolute;top:4px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:800;color:rgba(245,239,228,.6)}
+  .radar .expand{position:absolute;right:-4px;top:-4px;width:26px;height:26px;border-radius:50%;background:var(--obsidian2);border:1px solid rgba(201,162,39,.5);display:flex;align-items:center;justify-content:center}
+
+  /* right controls */
+  .controls{position:absolute;right:14px;bottom:18px;display:flex;flex-direction:column;gap:10px;z-index:5;align-items:flex-end}
+  .pill{background:rgba(19,17,24,.85);border:1px solid rgba(201,162,39,.45);border-radius:999px;padding:11px 16px;font-size:12px;font-weight:800;color:var(--ivory);backdrop-filter:blur(8px)}
+  .pill.exit{border-color:rgba(245,239,228,.25);color:rgba(245,239,228,.75)}
+  .nextstep{display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(201,162,39,.28),rgba(216,182,92,.16));border:1px solid rgba(216,182,92,.65)}
+
+  /* mode chip: camera vs corridor */
+  .modechip{position:absolute;top:158px;right:14px;z-index:5;font-size:9.5px;font-weight:800;letter-spacing:.22em;color:rgba(56,199,216,.85);border:1px solid rgba(56,199,216,.4);border-radius:999px;padding:6px 10px;background:rgba(19,17,24,.7)}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scene">
+    <div class="ground">
+      <div class="ribbon"></div>
+      <!-- storefront slabs recede with the plane -->
+      <div class="shop" style="left:12%;top:64%">FOSSIL</div>
+      <div class="shop" style="left:10%;top:40%">MANGO</div>
+      <div class="shop" style="left:8%;top:16%">ONLY</div>
+      <div class="shop" style="right:12%;top:60%">GUESS</div>
+      <div class="shop" style="right:10%;top:34%">LEVI'S</div>
+    </div>
+  </div>
+
+  <!-- marching chevrons -->
+  <div class="chev"><svg width="92" height="52" viewBox="0 0 92 52">
+    <polygon points="46,0 92,34 74,52 46,30" fill="#D8B65C"/>
+    <polygon points="46,0 0,34 18,52 46,30" fill="#C9A227"/>
+    <polygon points="46,0 46,30 60,42 78,37" fill="#F2A03D" opacity=".85"/>
+  </svg></div>
+  <div class="chev"><svg width="92" height="52" viewBox="0 0 92 52">
+    <polygon points="46,0 92,34 74,52 46,30" fill="#D8B65C"/>
+    <polygon points="46,0 0,34 18,52 46,30" fill="#C9A227"/>
+    <polygon points="46,0 46,30 32,42 14,37" fill="#E84A8A" opacity=".7"/>
+  </svg></div>
+  <div class="chev"><svg width="92" height="52" viewBox="0 0 92 52">
+    <polygon points="46,0 92,34 74,52 46,30" fill="#D8B65C"/>
+    <polygon points="46,0 0,34 18,52 46,30" fill="#C9A227"/>
+    <polygon points="46,0 46,30 60,42 78,37" fill="#38C7D8" opacity=".6"/>
+  </svg></div>
+
+  <!-- destination beacon -->
+  <div class="beacon"><div class="pillar"></div><div class="gem"></div></div>
+
+  <div class="fx"></div>
+
+  <!-- HUD -->
+  <div class="mission">
+    <p class="eyebrow">MISSION · FASTEST ROUTE</p>
+    <h1><span style="color:var(--champagne-soft)">→</span> SEPHORA <span class="dist">42 m</span></h1>
+    <div class="step">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" stroke-width="2.5"><path d="M9 18l-6-6 6-6M3 12h18"/></svg>
+      Walk left past FOSSIL and MANGO
+    </div>
+  </div>
+
+  <div class="modechip">CORRIDOR MODE · CAM OFF</div>
+
+  <div class="radar">
+    <div class="disc"><div class="sweep"></div><div class="ticks"></div></div>
+    <svg viewBox="0 0 128 128">
+      <polyline points="64,64 58,44 40,38 30,30" fill="none" stroke="#D8B65C" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>
+      <circle cx="30" cy="30" r="5" fill="#E84A8A"/>
+      <circle cx="64" cy="64" r="5.5" fill="#38C7D8"/>
+      <polygon points="64,52 69,64 64,61 59,64" fill="#38C7D8"/>
+    </svg>
+    <span class="n">N</span>
+    <div class="expand">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" stroke-width="2.5"><path d="M9 3H3v6M15 3h6v6M9 21H3v-6M15 21h6v-6"/></svg>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="pill nextstep">
+      Next step
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" stroke-width="2.5"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+    </div>
+    <div class="pill exit">Exit AR</div>
+  </div>
+</div>
+</body>
+</html>

@@ -604,7 +604,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
   return (
     <>
-      <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto pr-1" style={{ overscrollBehavior: 'contain' }}>
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1" style={{ overscrollBehavior: 'contain' }}>
         {msgs.map((m) =>
           m.from === 'bot' ? (
             <motion.div

@@ -166,6 +166,9 @@ export default function RouteMap({ route, onClose }) {
   const rx = useMotionValue(0)
   const srz = useSpring(rz, { stiffness: 60, damping: 14 })
   const srx = useSpring(rx, { stiffness: 60, damping: 14 })
+  const mapX = useMotionValue(0)
+  const mapY = useMotionValue(0)
+  const dragRef = useRef(null)
   useEffect(() => {
     const onOrient = (e) => {
       if (e.gamma == null) return
@@ -246,20 +249,35 @@ export default function RouteMap({ route, onClose }) {
       </header>
 
       {/* 3D viewport */}
-      <div className="route-map-canvas relative z-10 min-h-0 flex-1" style={{ perspective: 950 }}>
+      <div className="route-map-canvas relative z-10 min-h-0 flex-1" style={{ perspective: 950, touchAction: 'none' }}>
         <motion.div
-          className="absolute left-1/2 top-1/2 h-0 w-0"
-          style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}
+          className="absolute inset-0"
+          onPointerDown={(event) => {
+            event.currentTarget.setPointerCapture(event.pointerId)
+            dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, sx: mapX.get(), sy: mapY.get() }
+          }}
+          onPointerMove={(event) => {
+            const start = dragRef.current
+            if (!start || start.id !== event.pointerId) return
+            mapX.set(Math.max(-130, Math.min(130, start.sx + event.clientX - start.x)))
+            mapY.set(Math.max(-190, Math.min(190, start.sy + event.clientY - start.y)))
+          }}
+          onPointerUp={(event) => {
+            if (dragRef.current?.id === event.pointerId) dragRef.current = null
+          }}
+          onPointerCancel={() => { dragRef.current = null }}
+          style={{ x: mapX, y: mapY, transformStyle: 'preserve-3d', cursor: 'grab', touchAction: 'none' }}
         >
-          <motion.div
-            className="absolute"
-            style={{
-              width: PLANE_W,
-              height: PLANE_H,
-              transform: 'rotateX(52deg) rotateZ(-10deg)',
-              transformStyle: 'preserve-3d',
-            }}
-          >
+          <motion.div className="absolute left-1/2 top-1/2 h-0 w-0" style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}>
+            <motion.div
+              className="absolute"
+              style={{
+                width: PLANE_W,
+                height: PLANE_H,
+                transform: 'rotateX(52deg) rotateZ(-10deg)',
+                transformStyle: 'preserve-3d',
+              }}
+            >
             <AnimatePresence mode="popLayout" custom={dir}>
               <motion.div
                 key={floorId}
@@ -342,6 +360,7 @@ export default function RouteMap({ route, onClose }) {
                 </svg>
               </motion.div>
             </AnimatePresence>
+            </motion.div>
           </motion.div>
         </motion.div>
 

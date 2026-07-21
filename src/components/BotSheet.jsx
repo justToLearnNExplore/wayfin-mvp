@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import BotChat from './BotChat.jsx'
 
-export default function BotSheet({ onClose, onEnter, store, lastVisited, onRouted, mode = 'landing' }) {
+export default function BotSheet({ onClose, onEnter, store, lastVisited, onRouteReady, onOpenRoute, mode = 'landing' }) {
   const [expanded, setExpanded] = useState(false)
   const landing = mode === 'landing'
 
@@ -22,7 +22,7 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       {...slideProps}
       animate={{ ...(slideProps.animate ?? {}), height }}
       transition={slideProps.transition ?? { duration: 0.45, ease: [0.2, 0.9, 0.25, 1] }}
-      className="absolute left-2.5 right-2.5 bottom-2.5 rounded-[26px] border border-champagne/35 p-5 flex flex-col gap-3 backdrop-blur-xl"
+      className="absolute left-2.5 right-2.5 bottom-2.5 z-20 rounded-[26px] border border-champagne/35 p-5 flex flex-col gap-3 backdrop-blur-xl"
       style={{ background: 'linear-gradient(180deg, rgba(23,20,30,.94), rgba(13,11,18,.97))', height }}
     >
       <div className="flex items-center gap-2.5">
@@ -56,7 +56,8 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       <BotChat
         initialStore={store}
         lastVisited={lastVisited}
-        onRouted={onRouted}
+        onRouteReady={onRouteReady}
+        onOpenRoute={onOpenRoute}
         onEnter={landing ? onEnter : undefined}
         onExpand={() => setExpanded(true)}
       />

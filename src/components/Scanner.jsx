@@ -38,7 +38,7 @@ export default function Scanner({ onResult, onClose }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[60] flex flex-col bg-[#0B0A0F] text-[#F5EFE4]"
+      className="fixed inset-0 z-[60] flex flex-col overflow-y-auto bg-[#0B0A0F] text-[#F5EFE4]"
     >
       <div className="flex items-center justify-between px-5 pt-12">
         <div>
@@ -59,7 +59,10 @@ export default function Scanner({ onResult, onClose }) {
       </div>
 
       {/* viewfinder */}
-      <div className="relative mx-auto mt-8 aspect-square w-[78%] max-w-[340px] overflow-hidden rounded-3xl border border-[#C9A227]/40 bg-black">
+      <div
+        className="relative mx-auto mt-8 aspect-square shrink-0 overflow-hidden rounded-3xl border border-[#C9A227]/40 bg-black"
+        style={{ width: 'min(78%, 340px, 44dvh)' }}
+      >
         <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
         {cameraState !== 'live' && (
           <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-[12.5px] text-[#F5EFE4]/60">
@@ -84,7 +87,7 @@ export default function Scanner({ onResult, onClose }) {
         />
       </div>
 
-      <div className="mt-8 px-6">
+      <div className="mt-8 shrink-0 px-6 pb-8">
         <p className="text-center text-[11px] font-semibold tracking-[0.2em] text-[#F5EFE4]/45">
           NO BARCODE HANDY? TRY A DEMO PRODUCT
         </p>

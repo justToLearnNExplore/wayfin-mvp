@@ -5,3 +5,4 @@ dev-dist/
 *.local
 .env
 .env.*
+.agents/

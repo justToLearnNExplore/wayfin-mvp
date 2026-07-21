@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FLOORS, LANDMARKS } from '../data/stores.js'
+import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores.js'
 import { allStores, bestMeetingPoint, describeRoute, findStoreNode, floorLabelOf } from '../lib/routing.js'
 import { findProduct } from '../data/products.js'
 import { parseIntent } from '../services/intentParser.js'
@@ -46,9 +46,14 @@ const parkTime = (p) =>
 // Resolve an LLM-returned name against the real catalogue (landmarks first,
 // then stores). The parser's output is never trusted blindly — anything that
 // doesn't resolve here is treated as low confidence.
-const resolveNode = (name) => {
+const resolveNode = (name, parkingLevel = null) => {
   if (!name) return null
   const q = name.trim().toLowerCase()
+  const level = PARKING_LEVELS.find((item) => item.id.toLowerCase() === parkingLevel?.trim().toLowerCase())?.id
+  const parking = PARKING_NODES.find(
+    (node) => node.name.toLowerCase() === q && (!level || node.floor === level)
+  )
+  if (parking) return { id: `${parking.floor}:${parking.name}`, name: parking.name, floor: parking.floor }
   const lm = LANDMARKS.find((l) => l.name.toLowerCase() === q)
   if (lm) return { id: `${lm.floor}:${lm.name}`, name: lm.name, floor: lm.floor }
   return findStoreNode(name)
@@ -57,6 +62,16 @@ const resolveNode = (name) => {
 // Local fuzzy candidates for the "did you mean…" fallback.
 // Punctuation-insensitive so "levis" matches "LEVI'S".
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '')
+const parkingOriginFromText = (text) => {
+  const level = text.match(/\bP\s?([1-3])\b/i)?.[1]
+  const zone = text.match(/\bzone\s*([A-D])\b/i)?.[1]?.toUpperCase()
+  if (!level || !zone || !/\b(from|at|near|starting)\b/i.test(text)) return null
+  return resolveNode(`Zone ${zone}`, `P${level}`)
+}
+const storeMentionedIn = (text) => {
+  const query = norm(text)
+  return allStores().find((node) => query.includes(norm(node.name))) ?? null
+}
 const suggestCandidates = (text) => {
   const q = norm(text || '').trim()
   if (!q) return []
@@ -74,7 +89,7 @@ const suggestCandidates = (text) => {
     .map(([, n]) => n)
 }
 
-export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, onExpand }) {
+export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpenRoute, onEnter, onExpand }) {
   const [msgs, setMsgs] = useState([])
   const [options, setOptions] = useState([])
   const [input, setInput] = useState('')
@@ -145,6 +160,13 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     }
     flow.current.phase = 'askOrigin'
     const opts = [...ORIGINS.map((o) => ({ id: `origin:${o.id}`, label: o.label }))]
+    const parking = getParking()
+    if (parking) {
+      opts.unshift({
+        id: `origin:${parking.level}:Zone ${parking.zone}`,
+        label: `My car · ${parking.level} · Zone ${parking.zone}`,
+      })
+    }
     if (lastVisited && lastVisited !== flow.current.dest?.id) {
       opts.unshift({
         id: `origin:${lastVisited}`,
@@ -162,17 +184,48 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
       flow.current = { phase: 'idle', dest: null }
       return
     }
+    onRouteReady?.(route)
+    flow.current = { phase: 'idle', dest: null, route }
+    // A complete conversational request should hand straight into guidance.
+    // The chat remains mounted behind the route HUD and is available via Chat.
+    onOpenRoute?.(route)
     botSay(
       route.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
         `\n\n~${route.minutes} min walk (${route.metres} m).`,
       [
+        { id: 'visual-route', label: 'View map' },
         { id: 'explore', label: 'New route' },
         { id: 'minimize', label: 'Done — back to browsing' },
       ],
       600
     )
-    onRouted?.(dest.id)
-    flow.current = { phase: 'idle', dest: null }
+  }
+
+  // Shared by the "I'm leaving" chip flow and the LLM parking intent:
+  // route from wherever the user is, down the parking lift, to the exact
+  // basement zone where the car is pinned.
+  const giveCarRoute = (originId) => {
+    const p = getParking()
+    const route = p && describeRoute(originId, `${p.level}:Zone ${p.zone}`)
+    if (!p || !route) return botSay("I couldn't chart that one — try another spot?", idleOptions())
+    route.steps = [
+      ...route.steps,
+      `Your car is on the ${p.zone} pillars — parked ${parkTime(p)}. 🚗`,
+    ]
+    onRouteReady?.(route)
+    flow.current = { phase: 'idle', dest: null, route }
+    onOpenRoute?.(route)
+    botSay(
+      `Your car: ${p.level} · Zone ${p.zone} (since ${parkTime(p)}).\n\n` +
+        route.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
+        `\n\n~${route.minutes} min to your car.`,
+      [
+        { id: 'visual-route', label: 'View map' },
+        { id: 'pclear', label: 'Got it — clear the pin' },
+        { id: 'minimize', label: 'Done' },
+      ],
+      600
+    )
   }
 
   const choose = (opt) => {
@@ -181,6 +234,11 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     if (opt.id === 'enter') return onEnter?.()
 
     if (opt.id === 'route') return askOrigin()
+
+    if (opt.id === 'visual-route') {
+      if (flow.current.route) onOpenRoute?.(flow.current.route)
+      return
+    }
 
     if (opt.id === 'explore') {
       flow.current.phase = 'askCategory'
@@ -262,16 +320,19 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     if (opt.id === 'fgo') {
       const route = describeRoute(flow.current.me, flow.current.them)
       if (!route) return botSay("I couldn't chart that path — try again?", idleOptions())
+      onRouteReady?.(route)
+      flow.current = { phase: 'idle', dest: null, route }
+      onOpenRoute?.(route)
       botSay(
         route.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
           `\n\n~${route.minutes} min and you're reunited.`,
         [
+          { id: 'visual-route', label: 'View map' },
           { id: 'friend', label: 'Find another friend' },
           { id: 'minimize', label: 'Done' },
         ],
         600
       )
-      flow.current = { phase: 'idle', dest: null }
       return
     }
 
@@ -280,17 +341,20 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
       if (!meet) return botSay("No good middle ground found — try routing to them instead.", idleOptions())
       const route = describeRoute(flow.current.me, meet.node.id)
       const friendMins = Math.max(1, Math.round(meet.b / 75))
+      onRouteReady?.(route)
+      flow.current = { phase: 'idle', dest: null, route }
+      onOpenRoute?.(route)
       botSay(
         `Fairest spot: ${meet.node.name}, ${floorLabelOf(meet.node.floor)}.\n\n` +
           route.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') +
           `\n\nTell your friend — they're only ~${friendMins} min away from it.`,
         [
+          { id: 'visual-route', label: 'View map' },
           { id: 'friend', label: 'Find another friend' },
           { id: 'minimize', label: 'Done' },
         ],
         600
       )
-      flow.current = { phase: 'idle', dest: null }
       return
     }
 
@@ -333,16 +397,15 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     if (opt.id === 'car') {
       const p = getParking()
       if (!p) return botSay("I don't have a spot saved yet.", idleOptions())
+      flow.current.phase = 'carOrigin'
       botSay(
-        `Your car is at ${p.level} · Zone ${p.zone} — parked at ${parkTime(p)}.\n\n1. Take any escalator down to Ground Floor.\n2. Exit via Mall Entry 2.\n3. Follow the ${p.level} ramp signs — Zone ${p.zone} is marked on the pillars. 🚗`,
-        [
-          { id: 'pclear', label: 'Got it — clear the pin' },
-          { id: 'minimize', label: 'Done' },
-        ],
-        500
+        `${p.level} · Zone ${p.zone}, parked at ${parkTime(p)}. Where are you right now? I'll walk you out.`,
+        ORIGINS.map((o) => ({ id: `carfrom:${o.id}`, label: o.label }))
       )
       return
     }
+
+    if (opt.id.startsWith('carfrom:')) return giveCarRoute(opt.id.slice(8))
 
     if (opt.id === 'pclear') {
       localStorage.removeItem(PARKING_KEY)
@@ -379,9 +442,9 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
   // slots (dest / originPreset / them / parkLevel) and re-uses the same phases
   // and handlers the chips drive. Returns false if nothing usable was extracted.
   const applyIntent = (p) => {
-    const origin = resolveNode(p.origin)
-    const dest = resolveNode(p.destination)
-    const friendAt = resolveNode(p.friendLocation)
+    const origin = resolveNode(p.origin, p.parkingLevel)
+    const dest = resolveNode(p.destination, p.parkingLevel)
+    const friendAt = resolveNode(p.friendLocation, p.parkingLevel)
 
     // low confidence, or names that didn't survive catalogue validation →
     // disambiguate with the existing chip UI
@@ -455,13 +518,15 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
       case 'parking': {
         const saved = getParking()
         if (saved && !p.parkingLevel) {
+          // origin known from the intent parser → route to the exit directly
+          if (origin) {
+            giveCarRoute(origin.id)
+            return true
+          }
+          flow.current.phase = 'carOrigin'
           botSay(
-            `Your car is at ${saved.level} · Zone ${saved.zone} — parked at ${parkTime(saved)}.\n\n1. Take any escalator down to Ground Floor.\n2. Exit via Mall Entry 2.\n3. Follow the ${saved.level} ramp signs — Zone ${saved.zone} is marked on the pillars. 🚗`,
-            [
-              { id: 'pclear', label: 'Got it — clear the pin' },
-              { id: 'minimize', label: 'Done' },
-            ],
-            500
+            `${saved.level} · Zone ${saved.zone}, parked at ${parkTime(saved)}. Where are you right now? I'll walk you out.`,
+            ORIGINS.map((o) => ({ id: `carfrom:${o.id}`, label: o.label }))
           )
           return true
         }
@@ -510,6 +575,15 @@ export default function BotChat({ initialStore, lastVisited, onRouted, onEnter, 
     if (parsed && applyIntent(parsed)) return
 
     // 2) offline / no-key fallback: local substring match, unchanged behaviour
+    const parkingOrigin = parkingOriginFromText(text)
+    const mentionedDestination = storeMentionedIn(text)
+    if (parkingOrigin && mentionedDestination) {
+      flow.current.dest = mentionedDestination
+      flow.current.originPreset = parkingOrigin.id
+      botSay(`${mentionedDestination.name} — ${floorLabelOf(mentionedDestination.floor)}. Let's get you there.`, [], 350)
+      setTimeout(askOrigin, 800)
+      return
+    }
     const node = findStoreNode(text)
     if (node) {
       flow.current.dest = node

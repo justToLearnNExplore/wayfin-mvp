@@ -5,13 +5,16 @@
 // "the Apple reseller" → IMAGINE. It NEVER computes routes — that stays in
 // the deterministic engine on the client.
 
-import { FLOORS, LANDMARKS } from '../src/data/stores.js'
+import { FLOORS, LANDMARKS, PARKING_NODES } from '../src/data/stores.js'
 
 const STORE_LINES = FLOORS.flatMap((f) =>
   f.stores.map((s) => `- ${s.name} (${s.category}, ${f.label})`)
 )
 const LANDMARK_LINES = LANDMARKS.filter((l) => l.floor === 'G' || l.name === 'Food Court').map(
   (l) => `- ${l.name}`
+)
+const PARKING_LINES = PARKING_NODES.filter((node) => node.type === 'zone').map(
+  (node) => `- ${node.name} (${node.floor})`
 )
 const CATEGORIES = [...new Set(FLOORS.flatMap((f) => f.stores.map((s) => s.category)))]
 
@@ -24,6 +27,9 @@ ${STORE_LINES.join('\n')}
 LANDMARKS / POSSIBLE ORIGINS:
 ${LANDMARK_LINES.join('\n')}
 
+PARKING ZONES / POSSIBLE ORIGINS:
+${PARKING_LINES.join('\n')}
+
 CATEGORIES: ${CATEGORIES.join(', ')}
 PARKING LEVELS: P1, P2, P3
 
@@ -35,6 +41,7 @@ Rules:
 - If the user wants a KIND of store without naming one ("closest shoe shop"), use intent store_search and set category to the closest listed category (e.g. Footwear).
 - friend = anything about meeting/finding a person; set friendLocation if their spot is mentioned, origin if the user's own spot is mentioned.
 - parking = saving or recalling a parking spot; set parkingLevel if P1/P2/P3 (or "second basement" style phrasing) is mentioned.
+- A navigation request from or to a parking zone is still intent = navigate. For “from Zone A, P1 to UNIQLO”, set origin = “Zone A”, destination = “UNIQLO”, and parkingLevel = “P1”.
 - offers = asking about discounts, deals, sales.
 - confidence: 0..1. If you are not sure which catalogue entry the user means, use confidence below 0.6.
 - Unmatched fields must be null. Reply with JSON only.`

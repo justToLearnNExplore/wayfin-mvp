@@ -34,3 +34,55 @@ body {
     transition-duration: 0.001s !important;
   }
 }
+
+/* The PWA is portrait-first. On a phone rotated sideways, route guidance
+   becomes a two-column HUD so the fixed sheet cannot cover the map. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .route-map-header {
+    padding: 10px 12px;
+  }
+
+  .route-map-header h2 {
+    font-size: 22px;
+  }
+
+  .route-map-floor-strip {
+    position: absolute;
+    flex-direction: column;
+    left: auto;
+    right: 172px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    padding: 0;
+  }
+
+  .route-map-canvas {
+    position: absolute;
+    bottom: 10px;
+    left: 8px;
+    right: 222px;
+    top: 58px;
+    width: auto;
+    margin: 0;
+  }
+
+  .route-map-sheet {
+    position: absolute;
+    bottom: 8px;
+    left: auto;
+    right: 8px;
+    top: 8px;
+    width: 158px;
+    margin: 0;
+    padding: 12px;
+  }
+
+  .route-map-sheet h3 {
+    font-size: 22px;
+  }
+
+  .route-map-sheet .mt-3 {
+    margin-top: 8px;
+  }
+}

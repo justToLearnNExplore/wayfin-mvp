@@ -116,14 +116,32 @@ export const FLOORS = [
 ]
 
 // Non-store nodes: mall entries (G), the two escalator atriums (every floor),
-// and the food court seating area (2nd Floor).
+// the food court seating area (2nd Floor), and the parking lift lobby that
+// drops from Ground (near Mall Entry 2) into the basement levels.
 export const LANDMARKS = [
   { floor: 'G', name: 'Mall Entry 1', x: 25, y: 95, type: 'entry' },
   { floor: 'G', name: 'Mall Entry 2', x: 48, y: 95, type: 'entry' },
   { floor: 'G', name: 'Mall Entry 3', x: 78, y: 95, type: 'entry' },
+  { floor: 'G', name: 'Parking Lift', x: 54, y: 88, type: 'lift' },
   { floor: 'F2', name: 'Food Court', x: 40, y: 60, type: 'landmark' },
   ...['G', 'UG', 'F1', 'F2', 'F3'].flatMap((floor) => [
     { floor, name: 'Atrium 1', x: 30, y: 50, type: 'atrium' },
     { floor, name: 'Atrium 2', x: 63, y: 50, type: 'atrium' },
   ]),
 ]
+
+// Basement parking: three levels, four zones each, linked to the mall by the
+// parking lift. Zones sit in quadrants the way the pillars are painted.
+export const PARKING_LEVELS = [
+  { id: 'P1', short: 'P1', label: 'Parking P1' },
+  { id: 'P2', short: 'P2', label: 'Parking P2' },
+  { id: 'P3', short: 'P3', label: 'Parking P3' },
+]
+
+export const PARKING_NODES = PARKING_LEVELS.flatMap((level) => [
+  { floor: level.id, name: 'Parking Lift', x: 54, y: 50, type: 'lift' },
+  { floor: level.id, name: 'Zone A', x: 20, y: 25, type: 'zone' },
+  { floor: level.id, name: 'Zone B', x: 80, y: 25, type: 'zone' },
+  { floor: level.id, name: 'Zone C', x: 20, y: 75, type: 'zone' },
+  { floor: level.id, name: 'Zone D', x: 80, y: 75, type: 'zone' },
+])

@@ -5,6 +5,7 @@ import FloorExplorer from './components/FloorExplorer.jsx'
 import BotFab from './components/BotFab.jsx'
 import BotSheet from './components/BotSheet.jsx'
 import RouteMap from './components/RouteMap.jsx'
+import { trackEvent } from './lib/analytics.js'
 
 export default function App() {
   const [scene, setScene] = useState('landing') // 'landing' | 'explore'
@@ -14,6 +15,7 @@ export default function App() {
   const [activeRoute, setActiveRoute] = useState(null)
 
   const handleStoreTap = (store) => {
+    trackEvent('store_viewed', { store: store.name })
     setSelected(store)
     setBotOpen(true)
   }
@@ -30,7 +32,10 @@ export default function App() {
       <LayoutGroup>
         {scene === 'landing' && (
           <Landing
-            onEnter={() => setScene('explore')}
+            onEnter={() => {
+              trackEvent('mall_entered')
+              setScene('explore')
+            }}
             onRouteReady={handleRouteReady}
             onOpenRoute={setActiveRoute}
           />

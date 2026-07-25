@@ -5,8 +5,19 @@ import { allStores, bestMeetingPoint, describeRoute, findStoreNode, floorLabelOf
 import { findProductById } from '../data/products.js'
 import { parseIntent } from '../services/intentParser.js'
 import { matchProductImage } from '../services/productMatcher.js'
+import { trackEvent } from '../lib/analytics.js'
 import Scanner from './Scanner.jsx'
+import RateSheet from './RateSheet.jsx'
 import { SendIcon } from './icons.jsx'
+
+const RATED_KEY = 'wayfin_rated'
+const hasRated = () => {
+  try {
+    return localStorage.getItem(RATED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 const ORIGINS = [
   { id: 'G:Mall Entry 1', label: 'Mall Entry 1 · G' },
@@ -97,6 +108,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const [options, setOptions] = useState([])
   const [input, setInput] = useState('')
   const [scanning, setScanning] = useState(false)
+  const [rating, setRating] = useState(false)
   const flow = useRef({ phase: 'idle', dest: null })
   const scrollRef = useRef(null)
 
@@ -147,11 +159,12 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     [
       onEnter && { id: 'enter', label: 'Enter the mall →' },
       !skipExplore && { id: 'explore', label: 'Explore the stores' },
-      { id: 'friend', label: 'Find a friend' },
+      { id: 'friend', label: 'Locate your friend' },
       { id: 'scan', label: 'Check a price' },
       getParking()
         ? { id: 'car', label: "I'm leaving — where's my car? 🚗" }
         : { id: 'parking', label: 'Save my parking' },
+      !hasRated() && { id: 'rate', label: '⭐ Rate wayFin' },
     ].filter(Boolean)
 
   const askOrigin = () => {
@@ -187,6 +200,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current = { phase: 'idle', dest: null }
       return
     }
+    trackEvent('route_started', { destination: dest.name, floor: dest.floor })
     onRouteReady?.(route)
     flow.current = { phase: 'idle', dest: null, route }
     // A complete conversational request should hand straight into guidance.
@@ -215,6 +229,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       ...route.steps,
       `Your car is on the ${p.zone} pillars — parked ${parkTime(p)}. 🚗`,
     ]
+    trackEvent('parking_recalled')
     onRouteReady?.(route)
     flow.current = { phase: 'idle', dest: null, route }
     onOpenRoute?.(route)
@@ -277,9 +292,10 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
     // ---- find a friend ----
     if (opt.id === 'friend') {
+      trackEvent('friend_locate_started')
       flow.current.phase = 'friendMe'
       botSay(
-        "Let's link you up 🤝 First — where are YOU right now?",
+        "Let's locate them 🤝 First — where are YOU right now?",
         ORIGINS.map((o) => ({ id: `fme:${o.id}`, label: o.label }))
       )
       return
@@ -323,6 +339,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     if (opt.id === 'fgo') {
       const route = describeRoute(flow.current.me, flow.current.them)
       if (!route) return botSay("I couldn't chart that path — try again?", idleOptions())
+      trackEvent('friend_located', { mode: 'direct' })
       onRouteReady?.(route)
       flow.current = { phase: 'idle', dest: null, route }
       onOpenRoute?.(route)
@@ -331,7 +348,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           `\n\n~${route.minutes} min and you're reunited.`,
         [
           { id: 'visual-route', label: 'View map' },
-          { id: 'friend', label: 'Find another friend' },
+          { id: 'friend', label: 'Locate another friend' },
           { id: 'minimize', label: 'Done' },
         ],
         600
@@ -344,6 +361,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       if (!meet) return botSay("No good middle ground found — try routing to them instead.", idleOptions())
       const route = describeRoute(flow.current.me, meet.node.id)
       const friendMins = Math.max(1, Math.round(meet.b / 75))
+      trackEvent('friend_located', { mode: 'meet_in_middle' })
       onRouteReady?.(route)
       flow.current = { phase: 'idle', dest: null, route }
       onOpenRoute?.(route)
@@ -353,7 +371,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           `\n\nTell your friend — they're only ~${friendMins} min away from it.`,
         [
           { id: 'visual-route', label: 'View map' },
-          { id: 'friend', label: 'Find another friend' },
+          { id: 'friend', label: 'Locate another friend' },
           { id: 'minimize', label: 'Done' },
         ],
         600
@@ -363,8 +381,16 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
     // ---- price scan ----
     if (opt.id === 'scan') {
+      trackEvent('price_check_opened')
       botSay('For this MVP, scan the NEW ME Ribbed Square-Neck Bodysuit. I’ll return only NEW ME’s exact online price and sizes.', [], 250)
       setTimeout(() => setScanning(true), 550)
+      return
+    }
+
+    // ---- rate wayFin ----
+    if (opt.id === 'rate') {
+      trackEvent('rate_sheet_opened')
+      setRating(true)
       return
     }
 
@@ -390,6 +416,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     if (opt.id.startsWith('pzone:')) {
       const p = { level: flow.current.parkLevel, zone: opt.id.slice(6), time: Date.now() }
       localStorage.setItem(PARKING_KEY, JSON.stringify(p))
+      trackEvent('parking_saved', { level: p.level, zone: p.zone })
       botSay(
         `Pinned 📍 ${p.level} · Zone ${p.zone}, ${parkTime(p)}. I'll remember — when you're heading out, just tap “I'm leaving”.`,
         idleOptions()
@@ -673,6 +700,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       </form>
 
       {scanning && <Scanner onMatch={handleProductMatch} onClose={() => setScanning(false)} />}
+      {rating && <RateSheet onClose={() => setRating(false)} />}
     </>
   )
 }

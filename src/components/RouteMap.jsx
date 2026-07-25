@@ -31,6 +31,9 @@ const floorNodes = (floorId) => [
 ]
 
 const floorIndexOf = (id) => FLOOR_RAIL.indexOf(id)
+const MIN_ZOOM = 0.65
+const MAX_ZOOM = 2.4
+const clampZoom = (v) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v))
 
 function Block({ node, labelled, state = 'default', onSelect }) {
   const h = hash(node.name)
@@ -168,7 +171,17 @@ export default function RouteMap({ route, onClose }) {
   const srx = useSpring(rx, { stiffness: 60, damping: 14 })
   const mapX = useMotionValue(0)
   const mapY = useMotionValue(0)
+  const mapScale = useMotionValue(1)
+  const mapScaleSpring = useSpring(mapScale, { stiffness: 220, damping: 26 })
+  const [zoomLabel, setZoomLabel] = useState(1)
   const dragRef = useRef(null)
+  const pointersRef = useRef(new Map())
+  const pinchRef = useRef(null)
+  const setZoom = (next) => {
+    const z = clampZoom(next)
+    mapScale.set(z)
+    setZoomLabel(z)
+  }
   useEffect(() => {
     const onOrient = (e) => {
       if (e.gamma == null) return
@@ -254,19 +267,44 @@ export default function RouteMap({ route, onClose }) {
           className="absolute inset-0"
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId)
-            dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, sx: mapX.get(), sy: mapY.get() }
+            pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+            if (pointersRef.current.size === 2) {
+              const [p1, p2] = [...pointersRef.current.values()]
+              pinchRef.current = {
+                startDist: Math.hypot(p2.x - p1.x, p2.y - p1.y),
+                startScale: mapScale.get(),
+              }
+              dragRef.current = null
+            } else if (pointersRef.current.size === 1) {
+              dragRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, sx: mapX.get(), sy: mapY.get() }
+            }
           }}
           onPointerMove={(event) => {
+            if (!pointersRef.current.has(event.pointerId)) return
+            pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+
+            if (pointersRef.current.size === 2 && pinchRef.current) {
+              const [p1, p2] = [...pointersRef.current.values()]
+              const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+              setZoom(pinchRef.current.startScale * (dist / pinchRef.current.startDist))
+              return
+            }
             const start = dragRef.current
             if (!start || start.id !== event.pointerId) return
             mapX.set(Math.max(-130, Math.min(130, start.sx + event.clientX - start.x)))
             mapY.set(Math.max(-190, Math.min(190, start.sy + event.clientY - start.y)))
           }}
           onPointerUp={(event) => {
+            pointersRef.current.delete(event.pointerId)
+            if (pointersRef.current.size < 2) pinchRef.current = null
             if (dragRef.current?.id === event.pointerId) dragRef.current = null
           }}
-          onPointerCancel={() => { dragRef.current = null }}
-          style={{ x: mapX, y: mapY, transformStyle: 'preserve-3d', cursor: 'grab', touchAction: 'none' }}
+          onPointerCancel={(event) => {
+            pointersRef.current.delete(event.pointerId)
+            pinchRef.current = null
+            dragRef.current = null
+          }}
+          style={{ x: mapX, y: mapY, scale: mapScaleSpring, transformStyle: 'preserve-3d', cursor: 'grab', touchAction: 'none' }}
         >
           <motion.div className="absolute left-1/2 top-1/2 h-0 w-0" style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}>
             <motion.div
@@ -396,6 +434,33 @@ export default function RouteMap({ route, onClose }) {
             </div>
           </motion.div>
         )}
+
+        {/* zoom controls */}
+        <div className="absolute bottom-3 left-3 z-20 flex flex-col overflow-hidden rounded-xl border border-ivory/15 bg-obsidian/85 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={() => setZoom(mapScale.get() + 0.25)}
+            aria-label="Zoom in"
+            className="flex h-11 w-11 items-center justify-center text-ivory/80 cursor-pointer active:bg-ivory/10 disabled:cursor-not-allowed disabled:opacity-30"
+            disabled={zoomLabel >= MAX_ZOOM}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          <div className="h-px w-full bg-ivory/10" />
+          <button
+            type="button"
+            onClick={() => setZoom(mapScale.get() - 0.25)}
+            aria-label="Zoom out"
+            className="flex h-11 w-11 items-center justify-center text-ivory/80 cursor-pointer active:bg-ivory/10 disabled:cursor-not-allowed disabled:opacity-30"
+            disabled={zoomLabel <= MIN_ZOOM}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+              <path d="M5 12h14" />
+            </svg>
+          </button>
+        </div>
 
         {/* floor rail */}
         <div className="route-map-floor-strip absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">

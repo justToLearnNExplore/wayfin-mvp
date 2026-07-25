@@ -26,5 +26,10 @@ export default defineConfig({
       }
     })
   ],
-  server: { host: true }
+  server: { host: true },
+  // @vercel/analytics/react must be pre-bundled with the rest of the app's
+  // React copy from the first dev-server boot; otherwise Vite's lazy
+  // dependency discovery can hand it a mismatched React runtime mid-session,
+  // surfacing as "Invalid hook call" in dev only (build is unaffected).
+  optimizeDeps: { include: ['@vercel/analytics/react'] },
 })

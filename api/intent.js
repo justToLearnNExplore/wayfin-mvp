@@ -97,7 +97,7 @@ export default async function handler(req, res) {
     )
     if (!r.ok) {
       const detail = await r.text()
-      return res.status(502).json({ error: 'llm_error', detail: detail.slice(0, 200) })
+      return res.status(502).json({ error: 'llm_error', detail: detail.slice(0, 900) })
     }
     const data = await r.json()
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text

@@ -9,6 +9,14 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Without these, a new service worker installs in the background but
+      // keeps waiting for every open tab to fully close before it takes
+      // over — so a fresh deploy can silently keep serving the old cached
+      // bundle. This makes updates take effect on the very next reload.
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       manifest: {
         name: 'wayFin — Orion Mall Guide',
         short_name: 'wayFin',

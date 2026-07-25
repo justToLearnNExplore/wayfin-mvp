@@ -1,8 +1,15 @@
 // Vercel serverless function: /api/product-match
 // The model can only select one identifier from the mall store catalogue. It
 // never supplies prices, sizes, links, or a visually-similar alternative.
+//
+// Note: the current UI (src/services/productMatcher.js) intentionally does
+// NOT call this endpoint — the live demo uses a deterministic local stub so
+// the price-match flow can never fail on stage. This route is kept ready for
+// when the team wants to flip on live multi-SKU vision matching.
 
 import { PRODUCTS } from '../src/data/products.js'
+
+const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 const CATALOGUE = PRODUCTS.map(
   (product) =>
@@ -21,14 +28,13 @@ Rules:
 - If the store branding, product details, or image quality do not support an exact match, return productId null.
 - Never invent an ID and never return a similar alternative.
 - confidence is 0 to 1. A non-null productId requires confidence of at least 0.82.
-Reply with JSON only.`
+Reply with JSON only, matching the response schema exactly.`
 
 const SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
+  type: 'OBJECT',
   properties: {
-    productId: { type: ['string', 'null'] },
-    confidence: { type: 'number' },
+    productId: { type: 'STRING', nullable: true },
+    confidence: { type: 'NUMBER' },
   },
   required: ['productId', 'confidence'],
 }
@@ -36,47 +42,48 @@ const SCHEMA = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
-  const key = process.env.OPENAI_API_KEY
-  if (!key) return res.status(503).json({ error: 'OPENAI_API_KEY not configured' })
+  const key = process.env.GEMINI_API_KEY
+  if (!key) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' })
 
   const image = typeof req.body?.image === 'string' ? req.body.image : ''
-  const isImageDataUrl = /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)
-  if (!isImageDataUrl || image.length > 5_500_000) {
+  const match = /^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i.exec(image)
+  if (!match || image.length > 5_500_000) {
     return res.status(400).json({ error: 'invalid_image' })
   }
+  const [, mimeType, base64Data] = match
 
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        instructions: INSTRUCTIONS,
-        input: [
-          {
-            role: 'user',
-            content: [
-              { type: 'input_text', text: 'Verify this item against the approved catalogue.' },
-              { type: 'input_image', image_url: image, detail: 'high' },
-            ],
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: INSTRUCTIONS }] },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: 'Verify this item against the approved catalogue.' },
+                { inline_data: { mime_type: mimeType, data: base64Data } },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 150,
+            responseMimeType: 'application/json',
+            responseSchema: SCHEMA,
           },
-        ],
-        temperature: 0,
-        max_output_tokens: 120,
-        text: {
-          format: { type: 'json_schema', name: 'product_match', schema: SCHEMA, strict: true },
-        },
-      }),
-    })
+        }),
+      }
+    )
     if (!response.ok) return res.status(502).json({ error: 'vision_error' })
 
     const data = await response.json()
-    const output =
-      data.output_text ??
-      data.output
-        ?.flatMap((item) => item.content ?? [])
-        .find((item) => item.type === 'output_text')?.text
-    const parsed = JSON.parse(output)
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+    if (!text) return res.status(502).json({ error: 'empty_response' })
+    const parsed = JSON.parse(text)
     const product = PRODUCTS.find((item) => item.id === parsed.productId)
     const exactMatch = product && parsed.confidence >= 0.82
     return res.status(200).json({ productId: exactMatch ? product.id : null })

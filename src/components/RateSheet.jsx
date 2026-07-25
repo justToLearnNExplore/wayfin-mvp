@@ -7,25 +7,27 @@ const RATED_KEY = 'wayfin_rated'
 
 const STAR_LABELS = ['Not great', 'Okay', 'Good', 'Great', 'Loved it']
 
-// Founder's WhatsApp, in wa.me format (country code + number, no + or spaces).
-const FOUNDER_WHATSAPP = '919370798131'
+// All submissions land here — a plain mailto: link, so no email API key or
+// backend is needed. The submitter's own mail client sends it.
+const FOUNDER_EMAIL = 'wayfin.app@gmail.com'
 
-const buildWhatsAppLink = ({ rating, name, email, phone, comment }) => {
+const buildMailLink = ({ rating, name, email, phone, comment }) => {
   const lines = [
-    `New wayFin rating: ${'⭐'.repeat(rating)} (${rating}/5)`,
+    `Rating: ${'⭐'.repeat(rating)} (${rating}/5)`,
     `Name: ${name.trim() || 'not given'}`,
     `Email: ${email.trim() || 'not given'}`,
     `Phone: ${phone.trim() || 'not given'}`,
   ]
   if (comment.trim()) lines.push(`Comment: ${comment.trim()}`)
-  return `https://wa.me/${FOUNDER_WHATSAPP}?text=${encodeURIComponent(lines.join('\n'))}`
+  const subject = `wayFin rating — ${rating}/5 from ${name.trim() || 'a visitor'}`
+  return `mailto:${FOUNDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`
 }
 
 // Full-screen rating + lead-capture sheet. Submissions are sent as a Vercel
 // Analytics custom event ('rating_submitted') — visible in the project's
-// Analytics → Events tab, filterable by property — AND opened as a wa.me
-// deep link so the submitter's own WhatsApp sends the details straight to
-// the founder's number with one tap. No new API key, no backend.
+// Analytics → Events tab, filterable by property — AND opened as a mailto:
+// deep link so the submitter's own mail app sends the details straight to
+// wayfin.app@gmail.com with one tap. No new API key, no backend.
 export default function RateSheet({ onClose }) {
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
@@ -48,9 +50,9 @@ export default function RateSheet({ onClose }) {
     try {
       localStorage.setItem(RATED_KEY, '1')
     } catch {}
-    // Opened synchronously inside the click handler so mobile popup blockers
-    // don't swallow it.
-    window.open(buildWhatsAppLink({ rating, name, email, phone, comment }), '_blank', 'noopener')
+    // mailto: hands off to the OS mail app in-place; window.open tends to
+    // leave a stray blank tab behind for mailto specifically.
+    window.location.href = buildMailLink({ rating, name, email, phone, comment })
     setSubmitted(true)
   }
 
@@ -97,13 +99,12 @@ export default function RateSheet({ onClose }) {
             Your feedback helps us bring wayFin to more malls.
           </p>
           <a
-            href={buildWhatsAppLink({ rating, name, email, phone, comment })}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={buildMailLink({ rating, name, email, phone, comment })}
             className="mt-5 text-[11px] font-semibold text-ivory/40 underline decoration-ivory/25 underline-offset-2"
           >
-            WhatsApp didn't open? Tap to send
+            Mail app didn't open? Tap to send
           </a>
+          <p className="mt-2 text-[10px] text-ivory/30">or reach us directly at {FOUNDER_EMAIL}</p>
           <button
             onClick={onClose}
             className="mt-5 flex min-h-12 items-center justify-center rounded-2xl border border-champagne/60 bg-champagne/15 px-8 text-[13px] font-extrabold text-champagne-soft cursor-pointer active:bg-champagne/30"

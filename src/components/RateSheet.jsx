@@ -7,10 +7,25 @@ const RATED_KEY = 'wayfin_rated'
 
 const STAR_LABELS = ['Not great', 'Okay', 'Good', 'Great', 'Loved it']
 
+// Founder's WhatsApp, in wa.me format (country code + number, no + or spaces).
+const FOUNDER_WHATSAPP = '919370798131'
+
+const buildWhatsAppLink = ({ rating, name, email, phone, comment }) => {
+  const lines = [
+    `New wayFin rating: ${'⭐'.repeat(rating)} (${rating}/5)`,
+    `Name: ${name.trim() || 'not given'}`,
+    `Email: ${email.trim() || 'not given'}`,
+    `Phone: ${phone.trim() || 'not given'}`,
+  ]
+  if (comment.trim()) lines.push(`Comment: ${comment.trim()}`)
+  return `https://wa.me/${FOUNDER_WHATSAPP}?text=${encodeURIComponent(lines.join('\n'))}`
+}
+
 // Full-screen rating + lead-capture sheet. Submissions are sent as a Vercel
 // Analytics custom event ('rating_submitted') — visible in the project's
-// Analytics → Events tab, filterable by property. That's the whole pipeline
-// for now: no separate database, nothing else to configure.
+// Analytics → Events tab, filterable by property — AND opened as a wa.me
+// deep link so the submitter's own WhatsApp sends the details straight to
+// the founder's number with one tap. No new API key, no backend.
 export default function RateSheet({ onClose }) {
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
@@ -33,6 +48,9 @@ export default function RateSheet({ onClose }) {
     try {
       localStorage.setItem(RATED_KEY, '1')
     } catch {}
+    // Opened synchronously inside the click handler so mobile popup blockers
+    // don't swallow it.
+    window.open(buildWhatsAppLink({ rating, name, email, phone, comment }), '_blank', 'noopener')
     setSubmitted(true)
   }
 
@@ -78,9 +96,17 @@ export default function RateSheet({ onClose }) {
           <p className="mt-2 max-w-[280px] text-[13px] leading-relaxed text-ivory/65">
             Your feedback helps us bring wayFin to more malls.
           </p>
+          <a
+            href={buildWhatsAppLink({ rating, name, email, phone, comment })}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-5 text-[11px] font-semibold text-ivory/40 underline decoration-ivory/25 underline-offset-2"
+          >
+            WhatsApp didn't open? Tap to send
+          </a>
           <button
             onClick={onClose}
-            className="mt-7 flex min-h-12 items-center justify-center rounded-2xl border border-champagne/60 bg-champagne/15 px-8 text-[13px] font-extrabold text-champagne-soft cursor-pointer active:bg-champagne/30"
+            className="mt-5 flex min-h-12 items-center justify-center rounded-2xl border border-champagne/60 bg-champagne/15 px-8 text-[13px] font-extrabold text-champagne-soft cursor-pointer active:bg-champagne/30"
           >
             Back to wayFin
           </button>

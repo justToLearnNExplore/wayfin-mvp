@@ -7,8 +7,12 @@ const RATED_KEY = 'wayfin_rated'
 
 const STAR_LABELS = ['Not great', 'Okay', 'Good', 'Great', 'Loved it']
 
-// All submissions land here — a plain mailto: link, so no email API key or
-// backend is needed. The submitter's own mail client sends it.
+// All submissions land here. We use Gmail's own web compose URL rather than
+// a mailto: link — mailto only works if the visitor's OS has a native mail
+// app configured as the default handler, which most mobile browser users
+// don't have. Gmail's compose URL is a plain https page: it opens in the
+// browser for anyone signed into a Google account, no app association or
+// API key required.
 const FOUNDER_EMAIL = 'wayfin.app@gmail.com'
 
 const buildMailLink = ({ rating, name, email, phone, comment }) => {
@@ -20,14 +24,21 @@ const buildMailLink = ({ rating, name, email, phone, comment }) => {
   ]
   if (comment.trim()) lines.push(`Comment: ${comment.trim()}`)
   const subject = `wayFin rating — ${rating}/5 from ${name.trim() || 'a visitor'}`
-  return `mailto:${FOUNDER_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\n'))}`
+  const params = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to: FOUNDER_EMAIL,
+    su: subject,
+    body: lines.join('\n'),
+  })
+  return `https://mail.google.com/mail/?${params.toString()}`
 }
 
 // Full-screen rating + lead-capture sheet. Submissions are sent as a Vercel
 // Analytics custom event ('rating_submitted') — visible in the project's
-// Analytics → Events tab, filterable by property — AND opened as a mailto:
-// deep link so the submitter's own mail app sends the details straight to
-// wayfin.app@gmail.com with one tap. No new API key, no backend.
+// Analytics → Events tab, filterable by property — AND opened as a Gmail
+// compose tab, pre-filled and addressed to wayfin.app@gmail.com. No new API
+// key, no backend, no native mail app dependency.
 export default function RateSheet({ onClose }) {
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
@@ -50,9 +61,10 @@ export default function RateSheet({ onClose }) {
     try {
       localStorage.setItem(RATED_KEY, '1')
     } catch {}
-    // mailto: hands off to the OS mail app in-place; window.open tends to
-    // leave a stray blank tab behind for mailto specifically.
-    window.location.href = buildMailLink({ rating, name, email, phone, comment })
+    // Opened synchronously inside the click handler so mobile popup blockers
+    // don't swallow it. Gmail compose is a real page, so a new tab (rather
+    // than navigating this one away) keeps the thank-you screen visible here.
+    window.open(buildMailLink({ rating, name, email, phone, comment }), '_blank', 'noopener')
     setSubmitted(true)
   }
 
@@ -100,9 +112,11 @@ export default function RateSheet({ onClose }) {
           </p>
           <a
             href={buildMailLink({ rating, name, email, phone, comment })}
+            target="_blank"
+            rel="noopener noreferrer"
             className="mt-5 text-[11px] font-semibold text-ivory/40 underline decoration-ivory/25 underline-offset-2"
           >
-            Mail app didn't open? Tap to send
+            Gmail didn't open? Tap to send
           </a>
           <p className="mt-2 text-[10px] text-ivory/30">or reach us directly at {FOUNDER_EMAIL}</p>
           <button

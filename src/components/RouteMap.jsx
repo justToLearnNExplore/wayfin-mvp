@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useMotionValue, useSpring } from 'framer-motion'
 import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores.js'
-import { floorLabelOf } from '../lib/routing.js'
+import { floorLabelOf, X_METERS } from '../lib/routing.js'
+import { useNavigationSession } from '../services/navigation/useNavigationSession.js'
+import { requestMotionPermission } from '../services/sensors/permissions.js'
 
 // ---------- premium 3D mall world (After Dark) ----------
 // A tilted extruded-block mall rendered in CSS 3D. The camera follows the
@@ -111,11 +113,38 @@ function Block({ node, labelled, state = 'default', onSelect }) {
   )
 }
 
-export default function RouteMap({ route, onClose }) {
+/**
+ * @param {Object} props
+ * @param {any} props.route
+ * @param {() => void} props.onClose
+ * @param {import('../services/localization/tracker.js').TrackerState} [props.live]
+ *   Live dead-reckoning state. When present and localized, the blue dot
+ *   follows the walker instead of the step anchor.
+ * @param {boolean} [props.isTracking]
+ * @param {() => void} [props.onStartTracking] Begin sensor tracking (user gesture).
+ * @param {() => void} [props.onReAnchor]      Open the location finder to re-fix.
+ */
+export default function RouteMap({ route, onClose, live, isTracking, onStartTracking, onReAnchor }) {
   const guidance = route.guidance ?? []
-  const [stepIdx, setStepIdx] = useState(0)
   const [selectedStore, setSelectedStore] = useState(null)
   const [confirmedLandmark, setConfirmedLandmark] = useState(null)
+  const [headingUp, setHeadingUp] = useState(true)
+
+  // Narrowed const rather than a boolean flag: this lets the type checker
+  // prove `liveState` is non-null everywhere it's dereferenced below.
+  const liveState = live?.isLocalized && isTracking ? live : null
+  const liveActive = liveState !== null
+
+  // The session owns step progression, live distance/ETA and spoken guidance,
+  // so the map and the voice can never describe different steps.
+  const session = useNavigationSession({
+    route,
+    position: liveActive ? { x: liveState.x, y: liveState.y, floor: liveState.floor } : null,
+    isLocalized: liveActive,
+  })
+  const stepIdx = session.stepIndex
+  const setStepIdx = session.goToStep
+
   const g = guidance[Math.min(stepIdx, guidance.length - 1)] ?? {}
   const anchor = route.path.find((n) => n.id === g.to) ?? route.dest
   const floorId = g.kind === 'escalator' || g.kind === 'lift' ? g.toFloor : g.floor ?? anchor.floor
@@ -124,7 +153,9 @@ export default function RouteMap({ route, onClose }) {
   const nextNode = route.path.slice(activePathIndex + 1).find((n) => n.floor === floorId) ?? null
   const positionNode = activeNode.floor === floorId ? activeNode : anchor
   const manualPosition = confirmedLandmark?.floor === floorId ? confirmedLandmark : null
-  const currentPosition = manualPosition ?? positionNode
+  // Priority: live sensor fix > manually confirmed landmark > step anchor.
+  const livePosition = liveActive && liveState.floor === floorId ? { x: liveState.x, y: liveState.y, name: liveState.anchorLabel ?? 'You' } : null
+  const currentPosition = livePosition ?? manualPosition ?? positionNode
   const prevFloor = useRef(floorId)
   const dir = floorIndexOf(floorId) <= floorIndexOf(prevFloor.current) ? 1 : -1
   useEffect(() => { prevFloor.current = floorId }, [floorId])
@@ -189,10 +220,10 @@ export default function RouteMap({ route, onClose }) {
       rx.set(Math.max(-4, Math.min(4, (e.beta - 40) / 12)))
     }
     window.addEventListener('deviceorientation', onOrient)
-    // iOS needs a user-gesture permission request
+    // iOS gates motion sensors behind a user gesture. Delegated to the sensors
+    // service so the platform quirks live in exactly one place.
     const askIOS = () => {
-      if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission)
-        DeviceOrientationEvent.requestPermission().catch(() => {})
+      requestMotionPermission()
       window.removeEventListener('pointerdown', askIOS)
     }
     window.addEventListener('pointerdown', askIOS, { once: true })
@@ -309,11 +340,19 @@ export default function RouteMap({ route, onClose }) {
           <motion.div className="absolute left-1/2 top-1/2 h-0 w-0" style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}>
             <motion.div
               className="absolute"
+              // In heading-up mode the plane counter-rotates against the
+              // compass so whatever is physically ahead stays at the top of
+              // the screen — the single biggest reduction in "which way do I
+              // turn?" confusion. The compass EMA already smooths this, so a
+              // CSS transition is enough to keep it fluid.
               style={{
                 width: PLANE_W,
                 height: PLANE_H,
-                transform: 'rotateX(52deg) rotateZ(-10deg)',
+                transform: `rotateX(52deg) rotateZ(${
+                  liveActive && headingUp ? -liveState.headingDeg - 10 : -10
+                }deg)`,
                 transformStyle: 'preserve-3d',
+                transition: 'transform 220ms linear',
               }}
             >
             <AnimatePresence mode="popLayout" custom={dir}>
@@ -369,13 +408,37 @@ export default function RouteMap({ route, onClose }) {
                       />
                     </>
                   )}
-                  {currentPosition.floor === floorId && (
+                  {(livePosition || currentPosition.floor === floorId) && (
                     <g transform={`translate(${pt(currentPosition).x} ${pt(currentPosition).y})`}>
-                      <circle r="16" fill="#38C7D8" fillOpacity=".12">
-                        <animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite" />
-                      </circle>
-                      <circle r="7" fill="#38C7D8" />
-                      <text y="-22" textAnchor="middle" fill="#8BE8F0" fontSize="10" fontWeight="800" letterSpacing="1.5">YOU</text>
+                      {/* Accuracy halo: radius IS the uncertainty, drawn to
+                          scale in map units. It swells as dead reckoning
+                          drifts and snaps tight on every re-anchor, so the
+                          user can always see how much to trust the dot. */}
+                      {liveActive && (
+                        <circle
+                          r={Math.max(8, liveState.uncertaintyMetres / X_METERS)}
+                          fill="#38C7D8"
+                          fillOpacity={liveState.needsReAnchor ? 0.07 : 0.13}
+                          stroke="#38C7D8"
+                          strokeOpacity={liveState.needsReAnchor ? 0.35 : 0.2}
+                          strokeDasharray={liveState.needsReAnchor ? '4 4' : undefined}
+                        />
+                      )}
+                      {!liveActive && (
+                        <circle r="16" fill="#38C7D8" fillOpacity=".12">
+                          <animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite" />
+                        </circle>
+                      )}
+                      {/* Heading cone — only meaningful once the compass has a fix. */}
+                      {liveActive && (
+                        <g transform={`rotate(${liveState.headingDeg})`}>
+                          <path d="M -9 -4 L 0 -26 L 9 -4 Z" fill="#38C7D8" fillOpacity=".55" />
+                        </g>
+                      )}
+                      <circle r="7" fill="#38C7D8" stroke="#0B0A0F" strokeWidth="2" />
+                      <text y="-30" textAnchor="middle" fill="#8BE8F0" fontSize="10" fontWeight="800" letterSpacing="1.5">
+                        YOU
+                      </text>
                     </g>
                   )}
                   {destOnFloor && (
@@ -433,6 +496,41 @@ export default function RouteMap({ route, onClose }) {
               </button>
             </div>
           </motion.div>
+        )}
+
+        {/* Drift prompt: the halo has grown past the point where it can tell
+            neighbouring shopfronts apart, so invite a re-fix. Navigation is
+            never interrupted — this is an offer, not a modal. */}
+        {liveActive && liveState.needsReAnchor && onReAnchor && (
+          <motion.button
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={onReAnchor}
+            className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/50 bg-obsidian/90 px-4 py-2.5 text-[11.5px] font-bold text-cyan shadow-xl backdrop-blur-md cursor-pointer active:bg-cyan/15"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+              <path d="M8 12l3 3 5-6" />
+            </svg>
+            Scan a shopfront to re-centre
+          </motion.button>
+        )}
+
+        {/* heading-up / north-up toggle */}
+        {liveActive && (
+          <button
+            type="button"
+            onClick={() => setHeadingUp((v) => !v)}
+            aria-pressed={headingUp}
+            aria-label={headingUp ? 'Switch to north-up map' : 'Switch to heading-up map'}
+            className={`absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
+              headingUp ? 'border-cyan/50 bg-cyan/15 text-cyan' : 'border-ivory/15 bg-obsidian/85 text-ivory/70'
+            }`}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M12 2l4 9-4-2-4 2 4-9zM12 13v9" />
+            </svg>
+          </button>
         )}
 
         {/* zoom controls */}
@@ -503,29 +601,70 @@ export default function RouteMap({ route, onClose }) {
           <div>
             <h3 className="font-display text-[32px] leading-none text-champagne-soft">{route.dest.name}</h3>
             <p className="mt-1.5 text-[13.5px] text-ivory/75">
-              <span className="font-bold text-champagne-soft">{route.metres} m</span> · about {route.minutes} min
+              {/* Live numbers count down as you walk; the static route total
+                  is only shown before tracking begins. */}
+              <span className="font-bold text-champagne-soft tabular-nums">
+                {liveActive ? session.remainingMetres : route.metres} m
+              </span>{' '}
+              · about {liveActive ? session.etaMinutes : route.minutes} min
+              {liveActive && <span className="ml-2 text-[11px] text-cyan">● live</span>}
             </p>
           </div>
-          <div
-            className="mt-1 h-9 w-9 shrink-0"
-            style={{
-              background: 'conic-gradient(from 210deg,#7C5CFF,#E84A8A,#F2A03D,#38C7D8,#7C5CFF)',
-              clipPath: 'polygon(50% 0,100% 28%,88% 100%,12% 100%,0 28%)',
-              borderRadius: 10,
-              opacity: 0.9,
-            }}
-          />
+          {liveActive ? (
+            <button
+              onClick={session.toggleMute}
+              aria-pressed={!session.muted}
+              aria-label={session.muted ? 'Turn on voice guidance' : 'Mute voice guidance'}
+              className={`mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border cursor-pointer ${
+                session.muted ? 'border-ivory/20 text-ivory/50' : 'border-cyan/50 bg-cyan/10 text-cyan'
+              }`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M11 5 6 9H2v6h4l5 4V5z" />
+                {session.muted ? <path d="M22 9l-6 6M16 9l6 6" /> : <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14" />}
+              </svg>
+            </button>
+          ) : (
+            <div
+              className="mt-1 h-9 w-9 shrink-0"
+              style={{
+                background: 'conic-gradient(from 210deg,#7C5CFF,#E84A8A,#F2A03D,#38C7D8,#7C5CFF)',
+                clipPath: 'polygon(50% 0,100% 28%,88% 100%,12% 100%,0 28%)',
+                borderRadius: 10,
+                opacity: 0.9,
+              }}
+            />
+          )}
         </div>
+
+        {/* Arrival banner — the session detects this from the live fix. */}
+        {session.arrived && (
+          <motion.p
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-3 rounded-xl border border-cyan/45 bg-cyan/10 px-4 py-2.5 text-center text-[13px] font-bold text-cyan"
+          >
+            You’ve arrived at {route.dest.name} ✨
+          </motion.p>
+        )}
+
         <div className="mt-3 flex items-center gap-3 border-t border-ivory/10 pt-3">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D8B65C" strokeWidth="2" className="shrink-0" aria-hidden="true">
             {stepIcon()}
           </svg>
-          <p className="font-display flex-1 text-[16.5px] leading-snug text-ivory/90">{g.text}</p>
+          <button
+            onClick={session.repeat}
+            aria-label="Repeat this instruction"
+            className="flex-1 text-left cursor-pointer"
+          >
+            <p className="font-display text-[16.5px] leading-snug text-ivory/90">{g.text}</p>
+          </button>
           <button
             onClick={() => {
               setConfirmedLandmark(null)
               setSelectedStore(null)
-              last ? onClose() : setStepIdx((i) => i + 1)
+              if (last) onClose()
+              else session.next()
             }}
             className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-champagne/60 bg-champagne/10 px-4 text-[12.5px] font-extrabold tracking-wide text-champagne-soft cursor-pointer active:bg-champagne/25"
           >
@@ -535,6 +674,21 @@ export default function RouteMap({ route, onClose }) {
             </svg>
           </button>
         </div>
+
+        {/* Live tracking is opt-in and must start from a real tap: iOS only
+            grants motion permission from inside a user gesture. */}
+        {!isTracking && onStartTracking && (
+          <button
+            onClick={onStartTracking}
+            className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-cyan/50 bg-cyan/10 text-[13px] font-extrabold text-cyan cursor-pointer active:bg-cyan/20"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+            </svg>
+            Start live navigation
+          </button>
+        )}
 
       </motion.div>
 

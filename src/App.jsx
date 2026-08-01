@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
+import { useLocalization } from './services/localization/useLocalization.js'
 import Landing from './components/Landing.jsx'
 import FloorExplorer from './components/FloorExplorer.jsx'
 import BotFab from './components/BotFab.jsx'
 import BotSheet from './components/BotSheet.jsx'
 import RouteMap from './components/RouteMap.jsx'
+import LocationFinder from './components/LocationFinder.jsx'
 import { trackEvent } from './lib/analytics.js'
 
 export default function App() {
@@ -27,13 +29,35 @@ export default function App() {
 
   const handleRouteReady = (route) => setLastVisited(route.dest.id)
 
+  // ---- live positioning -------------------------------------------------
+  // Owned at the app level so a fix survives the chat opening and closing, and
+  // so the map and chat always read the same position.
+  const localization = useLocalization()
+  /** Mid-route re-fix. Rendered above the map so navigation is never torn down. */
+  const [reAnchoring, setReAnchoring] = useState(false)
+
   /**
-   * Latest confirmed position fix from LocationFinder. Chunk D consumes this
-   * to seed the live dead-reckoning dot; holding it here keeps it alive across
-   * chat open/close.
-   * @type {[(import('./services/localization/tracker.js').Anchor & {nodeId?: string}) | null, Function]}
+   * Accept a confirmed fix from LocationFinder and (re)start dead reckoning.
+   * Re-anchoring mid-route only moves the estimate — navigation continues.
+   * @param {import('./services/localization/tracker.js').Anchor & {nodeId?: string}} anchor
    */
-  const [anchor, setAnchor] = useState(null)
+  const handleAnchor = useCallback(
+    (anchor) => {
+      localization.anchor(anchor)
+      // Sensors need a user gesture on iOS; this call originates from the tap
+      // that confirmed the location, so it is a legitimate moment to ask.
+      if (!localization.isTracking) localization.startTracking()
+    },
+    [localization]
+  )
+
+  // Constrain the estimate to the active route so lateral drift is absorbed.
+  useEffect(() => {
+    if (!activeRoute?.path) return localization.setRoutePath(null)
+    const floor = localization.state.floor
+    const sameFloor = activeRoute.path.filter((n) => n.floor === floor)
+    localization.setRoutePath(sameFloor.length > 1 ? sameFloor : null)
+  }, [activeRoute, localization.state.floor, localization])
 
   return (
     <div className="relative mx-auto h-dvh max-w-[430px] overflow-hidden">
@@ -46,7 +70,7 @@ export default function App() {
             }}
             onRouteReady={handleRouteReady}
             onOpenRoute={setActiveRoute}
-            onAnchor={setAnchor}
+            onAnchor={handleAnchor}
           />
         )}
         {scene === 'explore' && (
@@ -68,7 +92,7 @@ export default function App() {
                     lastVisited={lastVisited}
                     onRouteReady={handleRouteReady}
                     onOpenRoute={setActiveRoute}
-                    onAnchor={setAnchor}
+                    onAnchor={handleAnchor}
                     onClose={closeBot}
                   />
                 </motion.div>
@@ -79,7 +103,33 @@ export default function App() {
           </>
         )}
         <AnimatePresence>
-          {activeRoute && <RouteMap route={activeRoute} onClose={() => setActiveRoute(null)} />}
+          {activeRoute && (
+            <RouteMap
+              route={activeRoute}
+              live={localization.state}
+              isTracking={localization.isTracking}
+              onStartTracking={localization.startTracking}
+              onReAnchor={() => setReAnchoring(true)}
+              onClose={() => setActiveRoute(null)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Drift correction. Layered above the live map on purpose: the route,
+            the active step and the walked distance all survive, so confirming
+            a landmark only slides the dot — it never restarts navigation. */}
+        <AnimatePresence>
+          {reAnchoring && (
+            <LocationFinder
+              key="re-anchor"
+              destinationName={activeRoute?.dest?.name}
+              onLocated={(anchor) => {
+                handleAnchor(anchor)
+                setReAnchoring(false)
+              }}
+              onCancel={() => setReAnchoring(false)}
+            />
+          )}
         </AnimatePresence>
       </LayoutGroup>
     </div>

@@ -1,0 +1,44 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#161320"/>
+      <stop offset="100%" stop-color="#0B0A0F"/>
+    </radialGradient>
+    <linearGradient id="gem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C5CFF"/>
+      <stop offset="34%" stop-color="#E84A8A"/>
+      <stop offset="66%" stop-color="#F2A03D"/>
+      <stop offset="100%" stop-color="#38C7D8"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="34" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- ambient stars, echoing the entrance reveal -->
+  <g fill="#C9A227" opacity="0.5">
+    <circle cx="150" cy="180" r="3.5"/>
+    <circle cx="880" cy="230" r="3"/>
+    <circle cx="905" cy="700" r="3.5"/>
+    <circle cx="130" cy="760" r="3"/>
+    <circle cx="512" cy="120" r="2.5"/>
+  </g>
+
+  <!-- atrium ring motif -->
+  <circle cx="512" cy="512" r="360" fill="none" stroke="#C9A227" stroke-opacity="0.5" stroke-width="2.5"/>
+  <circle cx="512" cy="512" r="300" fill="none" stroke="#C9A227" stroke-opacity="0.25" stroke-width="1.5" stroke-dasharray="4 10"/>
+
+  <!-- gold glow behind the gem -->
+  <polygon points="512,252 772,397.6 709.6,772 314.4,772 252,397.6" fill="#C9A227" opacity="0.35" filter="url(#glow)"/>
+
+  <!-- prismatic gem mark -->
+  <polygon points="512,252 772,397.6 709.6,772 314.4,772 252,397.6" fill="url(#gem)"/>
+  <polygon points="512,252 772,397.6 512,470" fill="#ffffff" opacity="0.16"/>
+  <polygon points="252,397.6 512,470 314.4,772" fill="#0B0A0F" opacity="0.18"/>
+</svg>

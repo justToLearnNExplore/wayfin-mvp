@@ -9,8 +9,10 @@ import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores
 // Basements sit below Ground so floor-hop counts and up/down read correctly.
 const FLOOR_ORDER = ['P3', 'P2', 'P1', 'G', 'UG', 'F1', 'F2', 'F3']
 const LIFT_COST = 15 // metres-equivalent per parking-lift hop
-const X_METERS = 2 // mall long axis ≈ 200 m over x 0..100
-const Y_METERS = 0.4 // mall depth ≈ 40 m over y 0..100
+// Exported so the localization layer shares one source of truth for the
+// map's metre scale. Values and routing behaviour are unchanged.
+export const X_METERS = 2 // mall long axis ≈ 200 m over x 0..100
+export const Y_METERS = 0.4 // mall depth ≈ 40 m over y 0..100
 const ESCALATOR_COST = 12 // metres-equivalent per floor hop
 const NEIGHBOURS = 4
 

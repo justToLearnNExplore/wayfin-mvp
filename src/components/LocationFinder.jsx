@@ -245,7 +245,8 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
     allNames.current = [...CATALOGUE.values()].map((e) => e.name)
   }
 
-  const shell = (/** @type {React.ReactNode} */ children) => (
+  /** Common chrome around every screen. @param {any} children */
+  const shell = (children) => (
     <motion.section
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

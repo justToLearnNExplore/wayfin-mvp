@@ -111,8 +111,8 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const [scanning, setScanning] = useState(false)
   const [rating, setRating] = useState(false)
   const [locating, setLocating] = useState(false)
-  /** Which flow is waiting on the location answer. @type {React.MutableRefObject<'route'|'friend'|'car'>} */
-  const locateModeRef = useRef('route')
+  /** Which flow is waiting on the location answer. @type {{current: 'route'|'friend'|'car'}} */
+  const locateModeRef = useRef(/** @type {'route'|'friend'|'car'} */ ('route'))
   const flow = useRef({ phase: 'idle', dest: null })
   const scrollRef = useRef(null)
 

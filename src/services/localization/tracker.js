@@ -71,6 +71,10 @@ const SOURCE_BASE_UNCERTAINTY = {
  * @property {AnchorSource} source
  * @property {string} [label]       Human name of the landmark, for the UI.
  * @property {number} [confidence]  0..1 from the recogniser, if any.
+ * @property {string} [nodeId]      Graph node id, when the anchor came from a
+ *                                  catalogue landmark. Lets the chat hand
+ *                                  straight to routing without re-deriving an
+ *                                  id from coordinates.
  */
 
 /**

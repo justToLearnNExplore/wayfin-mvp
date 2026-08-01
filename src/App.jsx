@@ -27,6 +27,14 @@ export default function App() {
 
   const handleRouteReady = (route) => setLastVisited(route.dest.id)
 
+  /**
+   * Latest confirmed position fix from LocationFinder. Chunk D consumes this
+   * to seed the live dead-reckoning dot; holding it here keeps it alive across
+   * chat open/close.
+   * @type {[(import('./services/localization/tracker.js').Anchor & {nodeId?: string}) | null, Function]}
+   */
+  const [anchor, setAnchor] = useState(null)
+
   return (
     <div className="relative mx-auto h-dvh max-w-[430px] overflow-hidden">
       <LayoutGroup>
@@ -38,6 +46,7 @@ export default function App() {
             }}
             onRouteReady={handleRouteReady}
             onOpenRoute={setActiveRoute}
+            onAnchor={setAnchor}
           />
         )}
         {scene === 'explore' && (
@@ -59,6 +68,7 @@ export default function App() {
                     lastVisited={lastVisited}
                     onRouteReady={handleRouteReady}
                     onOpenRoute={setActiveRoute}
+                    onAnchor={setAnchor}
                     onClose={closeBot}
                   />
                 </motion.div>

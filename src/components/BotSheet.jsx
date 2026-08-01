@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import BotChat from './BotChat.jsx'
 
-export default function BotSheet({ onClose, onEnter, store, lastVisited, onRouteReady, onOpenRoute, mode = 'landing' }) {
+export default function BotSheet({ onClose, onEnter, store, lastVisited, onRouteReady, onOpenRoute, onAnchor, mode = 'landing' }) {
   const [expanded, setExpanded] = useState(false)
   const landing = mode === 'landing'
 
@@ -62,6 +62,7 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
         lastVisited={lastVisited}
         onRouteReady={onRouteReady}
         onOpenRoute={onOpenRoute}
+        onAnchor={onAnchor}
         onEnter={landing ? onEnter : undefined}
         onExpand={() => setExpanded(true)}
       />

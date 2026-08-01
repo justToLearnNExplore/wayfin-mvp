@@ -17,7 +17,7 @@ const rise = (delay) => ({
   transition: { delay, duration: 0.7, ease: [0.2, 0.8, 0.2, 1] },
 })
 
-export default function Landing({ onEnter, onRouteReady, onOpenRoute }) {
+export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }) {
   return (
     <div className="relative h-full w-full overflow-hidden bg-obsidian text-ivory">
       {/* constellation */}
@@ -94,7 +94,7 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute }) {
         </svg>
       </div>
 
-      <BotSheet mode="landing" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} />
+      <BotSheet mode="landing" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} onAnchor={onAnchor} />
     </div>
   )
 }

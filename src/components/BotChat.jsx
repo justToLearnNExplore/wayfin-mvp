@@ -8,6 +8,7 @@ import { matchProductImage } from '../services/productMatcher.js'
 import { trackEvent } from '../lib/analytics.js'
 import Scanner from './Scanner.jsx'
 import RateSheet from './RateSheet.jsx'
+import LocationFinder from './LocationFinder.jsx'
 import { SendIcon } from './icons.jsx'
 
 const RATED_KEY = 'wayfin_rated'
@@ -103,12 +104,15 @@ const suggestCandidates = (text) => {
     .map(([, n]) => n)
 }
 
-export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpenRoute, onEnter, onExpand }) {
+export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpenRoute, onAnchor, onEnter, onExpand }) {
   const [msgs, setMsgs] = useState([])
   const [options, setOptions] = useState([])
   const [input, setInput] = useState('')
   const [scanning, setScanning] = useState(false)
   const [rating, setRating] = useState(false)
+  const [locating, setLocating] = useState(false)
+  /** Which flow is waiting on the location answer. @type {React.MutableRefObject<'route'|'friend'|'car'>} */
+  const locateModeRef = useRef('route')
   const flow = useRef({ phase: 'idle', dest: null })
   const scrollRef = useRef(null)
 
@@ -167,29 +171,25 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       !hasRated() && { id: 'rate', label: '⭐ Rate wayFin' },
     ].filter(Boolean)
 
-  const askOrigin = () => {
-    // if the intent parser already extracted the origin, skip the question
-    if (flow.current.originPreset) {
+  /**
+   * Ask where the user is.
+   *
+   * Previously a list of six origin chips; now it opens {@link LocationFinder}
+   * so the answer can come from the camera, voice or free text. The chips
+   * survive as the manual fallback inside that screen, so nothing is lost.
+   *
+   * @param {'route'|'friend'|'car'} [mode] Which flow consumes the answer.
+   */
+  const askOrigin = (mode = 'route') => {
+    // If the intent parser already extracted the origin, skip asking entirely.
+    if (mode === 'route' && flow.current.originPreset) {
       const preset = flow.current.originPreset
       flow.current.originPreset = null
       return giveRoute(preset)
     }
     flow.current.phase = 'askOrigin'
-    const opts = [...ORIGINS.map((o) => ({ id: `origin:${o.id}`, label: o.label }))]
-    const parking = getParking()
-    if (parking) {
-      opts.unshift({
-        id: `origin:${parking.level}:Zone ${parking.zone}`,
-        label: `My car · ${parking.level} · Zone ${parking.zone}`,
-      })
-    }
-    if (lastVisited && lastVisited !== flow.current.dest?.id) {
-      opts.unshift({
-        id: `origin:${lastVisited}`,
-        label: `Just came from ${lastVisited.split(':')[1]}`,
-      })
-    }
-    botSay('Where are you right now?', opts)
+    locateModeRef.current = mode
+    setLocating(true)
   }
 
   const giveRoute = (originId) => {
@@ -294,10 +294,8 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     if (opt.id === 'friend') {
       trackEvent('friend_locate_started')
       flow.current.phase = 'friendMe'
-      botSay(
-        "Let's locate them 🤝 First — where are YOU right now?",
-        ORIGINS.map((o) => ({ id: `fme:${o.id}`, label: o.label }))
-      )
+      botSay("Let's locate them 🤝 First — where are YOU right now?", [], 250)
+      setTimeout(() => askOrigin('friend'), 500)
       return
     }
 
@@ -430,8 +428,10 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.phase = 'carOrigin'
       botSay(
         `${p.level} · Zone ${p.zone}, parked at ${parkTime(p)}. Where are you right now? I'll walk you out.`,
-        ORIGINS.map((o) => ({ id: `carfrom:${o.id}`, label: o.label }))
+        [],
+        250
       )
+      setTimeout(() => askOrigin('car'), 500)
       return
     }
 
@@ -442,6 +442,25 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       botSay('Pin cleared. Drive safe ✨', idleOptions())
       return
     }
+  }
+
+  /**
+   * Receive a confirmed position from {@link LocationFinder}.
+   *
+   * Rather than duplicating the routing logic, this synthesises exactly the
+   * chip the user would have tapped and replays it through `choose`, so the
+   * deterministic flows (route / friend / car) stay the single source of
+   * truth. The anchor is also handed upward to drive live positioning.
+   *
+   * @param {import('../services/localization/tracker.js').Anchor & {nodeId: string}} anchor
+   */
+  const handleLocated = (anchor) => {
+    setLocating(false)
+    onAnchor?.(anchor)
+
+    const prefix =
+      locateModeRef.current === 'friend' ? 'fme:' : locateModeRef.current === 'car' ? 'carfrom:' : 'origin:'
+    choose({ id: `${prefix}${anchor.nodeId}`, label: `📍 ${anchor.label}` })
   }
 
   const handleProductMatch = async (image) => {
@@ -701,6 +720,16 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
       {scanning && <Scanner onMatch={handleProductMatch} onClose={() => setScanning(false)} />}
       {rating && <RateSheet onClose={() => setRating(false)} />}
+      {locating && (
+        <LocationFinder
+          destinationName={locateModeRef.current === 'route' ? flow.current.dest?.name : undefined}
+          onLocated={handleLocated}
+          onCancel={() => {
+            setLocating(false)
+            botSay('No problem — tap a chip below whenever you’re ready.', idleOptions())
+          }}
+        />
+      )}
     </>
   )
 }

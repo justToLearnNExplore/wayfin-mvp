@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FLOORS } from '../data/stores.js'
 import StoreCard from './StoreCard.jsx'
@@ -19,9 +19,15 @@ const floorVariants = {
   }),
 }
 
-export default function FloorExplorer({ onStoreTap }) {
+export default function FloorExplorer({ onStoreTap, onFloorChange }) {
   const [[index, direction], setFloor] = useState([0, 0])
   const floor = FLOORS[index]
+
+  // Report the visible floor upward so the app bar can label it. Effect rather
+  // than a call inside `go`, so the very first floor is announced too.
+  useEffect(() => {
+    onFloorChange?.(floor)
+  }, [floor, onFloorChange])
 
   const go = (next) => {
     if (next < 0 || next >= FLOORS.length || next === index) return

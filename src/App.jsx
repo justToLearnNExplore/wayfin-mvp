@@ -3,6 +3,7 @@ import { AnimatePresence, LayoutGroup, motion } from 'framer-motion'
 import { useLocalization } from './services/localization/useLocalization.js'
 import Landing from './components/Landing.jsx'
 import FloorExplorer from './components/FloorExplorer.jsx'
+import AppBar from './components/AppBar.jsx'
 import BotFab from './components/BotFab.jsx'
 import BotSheet from './components/BotSheet.jsx'
 import RouteMap from './components/RouteMap.jsx'
@@ -15,6 +16,8 @@ export default function App() {
   const [selected, setSelected] = useState(null) // store object
   const [lastVisited, setLastVisited] = useState(null) // node id of last routed destination
   const [activeRoute, setActiveRoute] = useState(null)
+  /** Floor currently shown in the explorer, so the bar can label it. */
+  const [exploreFloor, setExploreFloor] = useState(null)
 
   const handleStoreTap = (store) => {
     trackEvent('store_viewed', { store: store.name })
@@ -22,10 +25,25 @@ export default function App() {
     setBotOpen(true)
   }
 
-  const closeBot = () => {
+  const openBot = useCallback(() => setBotOpen(true), [])
+
+  const closeBot = useCallback(() => {
     setBotOpen(false)
     setSelected(null)
-  }
+  }, [])
+
+  /**
+   * Return to the start. Closes whatever is layered on top first, so the
+   * shopper always lands somewhere coherent rather than on the landing screen
+   * with an orphaned sheet still open above it.
+   */
+  const goHome = useCallback(() => {
+    trackEvent('nav_home')
+    setBotOpen(false)
+    setSelected(null)
+    setActiveRoute(null)
+    setScene('landing')
+  }, [])
 
   const handleRouteReady = (route) => setLastVisited(route.dest.id)
 
@@ -91,8 +109,16 @@ export default function App() {
           />
         )}
         {scene === 'explore' && (
-          <>
-            <FloorExplorer onStoreTap={handleStoreTap} />
+          <div className="flex h-full flex-col">
+            {/* Always present, so entering the mall is no longer a one-way door. */}
+            <AppBar
+              onBack={goHome}
+              onHome={goHome}
+              context={exploreFloor?.short ? `${exploreFloor.short} floor` : undefined}
+            />
+            <div className="relative min-h-0 flex-1">
+              <FloorExplorer onStoreTap={handleStoreTap} onFloorChange={setExploreFloor} />
+            </div>
             <AnimatePresence>
               {botOpen ? (
                 <motion.div key="bot-overlay" className={`absolute inset-0 z-40 ${activeRoute ? 'invisible' : ''}`}>
@@ -114,10 +140,10 @@ export default function App() {
                   />
                 </motion.div>
               ) : (
-                <BotFab key="bot-fab" onOpen={() => setBotOpen(true)} />
+                <BotFab key="bot-fab" onOpen={openBot} />
               )}
             </AnimatePresence>
-          </>
+          </div>
         )}
         <AnimatePresence>
           {activeRoute && (

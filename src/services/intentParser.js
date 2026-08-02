@@ -3,11 +3,11 @@
 // (no deploy, no key, offline, timeout) — callers must fall back to the local
 // rule-based matcher, so the bot always works without the LLM.
 //
-// Shape: { intent: 'navigate'|'friend'|'parking'|'offers'|'store_search'|'unknown',
+// Shape: { intent: 'navigate'|'set_origin'|'friend'|'parking'|'offers'|'store_search'|'unknown',
 //          origin, destination, category, friendLocation, parkingLevel: string|null,
 //          confidence: number }
 
-const INTENTS = ['navigate', 'friend', 'parking', 'offers', 'store_search', 'unknown']
+const INTENTS = ['navigate', 'set_origin', 'friend', 'parking', 'offers', 'store_search', 'unknown']
 
 export async function parseIntent(message) {
   try {

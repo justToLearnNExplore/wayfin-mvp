@@ -39,7 +39,12 @@ CATEGORIES: ${CATEGORIES.join(', ')}
 PARKING LEVELS: P1, P2, P3
 
 Rules:
-- intent is one of: navigate, friend, parking, offers, store_search, unknown.
+- intent is one of: navigate, set_origin, friend, parking, offers, store_search, unknown.
+- set_origin is for a message that ONLY says where the user currently is, with
+  no destination: "I'm near H&M", "I'm at the food court", "standing by Atrium 2".
+  Use navigate instead the moment a destination is also mentioned.
+- unknown means you genuinely could not tell what they want. Never use it as a
+  place to put a message you DID understand.
 - Fill origin/destination/friendLocation ONLY with names copied EXACTLY from the lists above. Never invent a name.
 - Fuzzy-map descriptions to catalogue names: "the Apple reseller" → IMAGINE; "that makeup store" → SEPHORA; "the main entrance" → Mall Entry 2; "toy store" → HAMLEYS; "coffee" → STARBUCKS.
 - "near X" / "at X" / "came from X" / "I came from X" describes the user's origin ONLY — leave destination null unless a separate destination is also stated.
@@ -61,7 +66,7 @@ const SCHEMA = {
   properties: {
     intent: {
       type: 'string',
-      enum: ['navigate', 'friend', 'parking', 'offers', 'store_search', 'unknown'],
+      enum: ['navigate', 'set_origin', 'friend', 'parking', 'offers', 'store_search', 'unknown'],
     },
     origin: { type: ['string', 'null'] },
     destination: { type: ['string', 'null'] },

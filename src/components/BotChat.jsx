@@ -7,6 +7,8 @@ import { parseIntent } from '../services/intentParser.js'
 import { matchProductImage } from '../services/productMatcher.js'
 import { trackEvent } from '../lib/analytics.js'
 import { rankCandidates } from '../services/localization/candidates.js'
+import { emptySlots, fillSlots, isActionable, acknowledge, phraseTarget } from '../services/navigation/slots.js'
+import { resolveLocationText } from '../services/localization/textResolver.js'
 import Scanner from './Scanner.jsx'
 import WaitlistSheet, { JOINED_KEY } from './WaitlistSheet.jsx'
 import LocationFinder from './LocationFinder.jsx'
@@ -100,6 +102,11 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   /** Which flow is waiting on the location answer. @type {{current: 'route'|'friend'|'car'}} */
   const locateModeRef = useRef(/** @type {'route'|'friend'|'car'} */ ('route'))
   const flow = useRef({ phase: 'idle', dest: null })
+  /**
+   * Where you are / where you're going. Survives across turns so the bot
+   * never re-asks for something it was already told.
+   */
+  const slots = useRef(emptySlots())
   const scrollRef = useRef(null)
 
   const push = (from, text) =>
@@ -265,11 +272,20 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     }
 
     if (opt.id.startsWith('dest:')) {
-      flow.current.dest = [...allStores()].find((n) => n.id === opt.id.slice(5))
+      const picked = [...allStores()].find((n) => n.id === opt.id.slice(5))
+      flow.current.dest = picked
+      // Keep the slots authoritative: a tap is just another way of answering,
+      // so the bot must not re-ask for an origin it already holds.
+      if (picked) slots.current = { ...slots.current, destination: picked }
       return askOrigin()
     }
 
-    if (opt.id.startsWith('origin:')) return giveRoute(opt.id.slice(7))
+    if (opt.id.startsWith('origin:')) {
+      const from = opt.id.slice(7)
+      const node = [...allStores()].find((n) => n.id === from)
+      slots.current = { ...slots.current, origin: node ?? slots.current.origin }
+      return giveRoute(from)
+    }
 
     if (opt.id === 'minimize') {
       botSay('Happy hunting ✨ Tap me anytime.', idleOptions())
@@ -444,6 +460,15 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     setLocating(false)
     onAnchor?.(anchor)
 
+    // Camera / voice / typed fixes fill the same origin slot as everything
+    // else, so the three input methods stay interchangeable.
+    if (locateModeRef.current === 'route' && anchor.nodeId) {
+      slots.current = {
+        ...slots.current,
+        origin: { id: anchor.nodeId, name: anchor.label, floor: anchor.floor },
+      }
+    }
+
     const prefix =
       locateModeRef.current === 'friend' ? 'fme:' : locateModeRef.current === 'car' ? 'carfrom:' : 'origin:'
     choose({ id: `${prefix}${anchor.nodeId}`, label: `📍 ${anchor.label}` })
@@ -462,9 +487,17 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     const dest = resolveNode(p.destination, p.parkingLevel)
     const friendAt = resolveNode(p.friendLocation, p.parkingLevel)
 
-    // low confidence, or names that didn't survive catalogue validation →
-    // disambiguate with the existing chip UI
-    if (p.confidence < 0.6 || p.intent === 'unknown') {
+    // ---- slot filling ----------------------------------------------------
+    // Runs BEFORE any intent-label branching, because the label is not a
+    // reliable signal of whether we understood the message. A bare "I'm near
+    // H&M" arrives as intent `unknown` with a perfectly good origin at 0.9;
+    // the old code discarded it for the label and then offered H&M back as a
+    // destination, routing the shopper to where they already stood.
+    const merged = fillSlots(slots.current, p, resolveNode)
+    slots.current = merged.slots
+
+    // Nothing resolved and no actionable intent — only NOW is it fair to guess.
+    if (!isActionable(p, merged.filled)) {
       const cands = suggestCandidates(p.destination || p.origin || p.friendLocation)
       if (cands.length) {
         botSay(
@@ -474,6 +507,28 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         return true
       }
       return false
+    }
+
+    // A message that only told us where the user is: acknowledge it and ask
+    // for the one thing still missing, rather than treating it as a dead end.
+    if (merged.filled.includes('origin') && !merged.slots.destination) {
+      flow.current.originPreset = merged.slots.origin.id
+      flow.current.phase = 'askCategory'
+      botSay(
+        acknowledge(merged.slots, merged.filled),
+        CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+      )
+      return true
+    }
+
+    // Both slots known, from this message or an earlier one — route now and
+    // never re-ask for what we were already told.
+    if (merged.slots.origin && merged.slots.destination && p.intent !== 'friend') {
+      flow.current.dest = merged.slots.destination
+      botSay(acknowledge(merged.slots, merged.filled), [], 300)
+      const from = merged.slots.origin.id
+      setTimeout(() => giveRoute(from), 700)
+      return true
     }
 
     switch (p.intent) {
@@ -590,7 +645,42 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     const parsed = await parseIntent(text)
     if (parsed && applyIntent(parsed)) return
 
-    // 2) offline / no-key fallback: local substring match, unchanged behaviour
+    // 2) offline / no-key fallback.
+    //
+    // This path must handle "I'm near H&M" too. The LLM is not always
+    // reachable — no key, no signal, mall wifi — and a shopper telling the app
+    // where they are should not depend on a network round trip. The phrasing
+    // itself says which slot is meant, and resolveLocationText already turns
+    // the sentence into a catalogue landmark (built in Chunk C, previously
+    // wired only to the voice screen).
+    const target = phraseTarget(text)
+    if (target === 'origin') {
+      const resolved = resolveLocationText(text)
+      if (resolved.status === 'match' && resolved.matches?.length) {
+        const place = resolveNode(resolved.entry?.name) ?? {
+          id: resolved.matches[0].nodeId,
+          name: resolved.matches[0].name,
+          floor: resolved.matches[0].floor,
+        }
+        slots.current = { ...slots.current, origin: place }
+
+        // Already knew where they wanted to go — that is everything.
+        if (slots.current.destination) {
+          flow.current.dest = slots.current.destination
+          botSay(acknowledge(slots.current, ['origin']), [], 300)
+          setTimeout(() => giveRoute(place.id), 700)
+          return
+        }
+        flow.current.originPreset = place.id
+        flow.current.phase = 'askCategory'
+        botSay(
+          acknowledge(slots.current, ['origin']),
+          CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+        )
+        return
+      }
+    }
+
     const parkingOrigin = parkingOriginFromText(text)
     const mentionedDestination = storeMentionedIn(text)
     if (parkingOrigin && mentionedDestination) {
@@ -609,9 +699,32 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       )
       return
     }
-    const node = findStoreNode(text)
+    // Destination, offline. Three passes, widening: the whole string as a
+    // name, then a store named anywhere inside the sentence, then the NL
+    // resolver. "take me to puma" fails the first and succeeds on the second —
+    // matching only the whole string is why a plain sentence used to fall
+    // through to "did you mean" for a store it had clearly understood.
+    const node =
+      findStoreNode(text) ??
+      storeMentionedIn(text) ??
+      (() => {
+        const r = resolveLocationText(text)
+        return r.status === 'match' && r.matches?.length
+          ? { id: r.matches[0].nodeId, name: r.matches[0].name, floor: r.matches[0].floor }
+          : null
+      })()
+
     if (node) {
       flow.current.dest = node
+      slots.current = { ...slots.current, destination: node }
+
+      // Already know where they are — route instead of asking again.
+      if (slots.current.origin) {
+        botSay(acknowledge(slots.current, ['destination']), [], 300)
+        const from = slots.current.origin.id
+        setTimeout(() => giveRoute(from), 700)
+        return
+      }
       botSay(`${node.name} — ${floorLabelOf(node.floor)}. Let's get you there.`, [], 350)
       setTimeout(askOrigin, 800)
     } else {

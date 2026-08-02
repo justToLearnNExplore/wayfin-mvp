@@ -109,6 +109,7 @@ export default function App() {
               live={localization.state}
               isTracking={localization.isTracking}
               onStartTracking={localization.startTracking}
+              heading={localization.heading}
               onReAnchor={() => setReAnchoring(true)}
               onClose={() => setActiveRoute(null)}
             />

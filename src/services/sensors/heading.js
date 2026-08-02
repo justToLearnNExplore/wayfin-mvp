@@ -22,16 +22,20 @@
 import { normalizeDeg, smoothHeading } from '../localization/geometry.js'
 
 /**
- * Compass bearing (degrees clockwise from true north) that points along the
- * map's "up" direction, i.e. decreasing y.
+ * Starting assumption for the compass bearing that points along map-up.
  *
- * TODO(survey): measured roughly for Orion Mall @ Brigade Gateway — the long
- * axis runs approximately WNW→ESE. Stand at Mall Entry 2 facing into the mall
- * and use `calibrate()` to correct this on-site; the value only affects map
- * rotation, never the deterministic route itself.
+ * Deliberately 0 (map-up == north) rather than a guessed venue value. A wrong
+ * constant rotates the entire map confidently in the wrong direction, which is
+ * strictly worse for a lost shopper than not rotating at all.
+ *
+ * The real figure is LEARNED AT RUNTIME by NorthCalibrator (see
+ * ../localization/autoCalibration.js) from the legs the user walks between
+ * confirmed fixes, and heading-up rotation stays disabled until that estimate
+ * is trustworthy. This is what lets a new venue be onboarded without a site
+ * survey. Either way it only affects map rotation — never the route itself.
  * @type {number}
  */
-export const ORION_MAP_NORTH_OFFSET = 285
+export const ORION_MAP_NORTH_OFFSET = 0
 
 /**
  * Convert a true-north compass bearing into a map-frame bearing.
@@ -77,6 +81,9 @@ export function headingFromEvent(event) {
  * @typedef {Object} CompassOptions
  * @property {number} [alpha] Smoothing factor 0..1 (default 0.18).
  * @property {number} [mapNorthOffset]
+ * @property {(compassDeg: number) => void} [onRawCompass] Raw magnetic-north
+ *   reading, emitted before map-frame conversion so the auto-calibrator can
+ *   solve for the offset without it being pre-applied.
  */
 
 /**
@@ -86,6 +93,8 @@ export function headingFromEvent(event) {
  * @property {() => number} mapBearing  Latest smoothed map-frame bearing.
  * @property {() => boolean} hasFix     True once a real reading has arrived.
  * @property {(actualMapBearing: number) => void} calibrate
+ * @property {(offsetDeg: number) => void} setNorthOffset Apply an auto-learned offset.
+ * @property {() => number} rawCompass Latest raw magnetic-north reading.
  */
 
 /**
@@ -106,6 +115,10 @@ export function createCompass(onHeading, options = {}) {
     const compass = headingFromEvent(event)
     if (compass == null) return
     lastCompass = compass
+    // Raw magnetic-north reading, before any map-frame conversion. The
+    // auto-calibrator needs this untouched: converting first would bake in
+    // the very offset it is trying to solve for.
+    options.onRawCompass?.(compass)
 
     const mapBearing = mapBearingFromCompass(compass, mapNorthOffset)
     smoothed = seeded ? smoothHeading(smoothed, mapBearing, alpha) : mapBearing
@@ -138,5 +151,18 @@ export function createCompass(onHeading, options = {}) {
       seeded = true
       onHeading(smoothed)
     },
+
+    /**
+     * Apply an offset learned by the auto-calibrator. Unlike `calibrate()`
+     * this does not assume the user is facing any particular way — it just
+     * swaps in a better constant and lets the next reading flow through.
+     * @param {number} offsetDeg
+     */
+    setNorthOffset(offsetDeg) {
+      mapNorthOffset = normalizeDeg(offsetDeg)
+    },
+
+    /** Latest raw compass reading, degrees from magnetic north. */
+    rawCompass: () => lastCompass,
   }
 }

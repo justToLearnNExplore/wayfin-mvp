@@ -15,6 +15,7 @@ import { LocalizationTracker } from './tracker.js'
 import { createPedometer } from '../sensors/pedometer.js'
 import { createCompass } from '../sensors/heading.js'
 import { requestMotionPermission, motionSensorsLikelyAvailable } from '../sensors/permissions.js'
+import { NorthCalibrator, MIN_USABLE_CONFIDENCE } from './autoCalibration.js'
 
 /** React state publish rate, in Hz. */
 const PUBLISH_HZ = 15
@@ -36,6 +37,9 @@ const PUBLISH_HZ = 15
  * @property {'idle'|'granted'|'denied'|'unsupported'} permission
  * @property {boolean} sensorsAvailable
  * @property {(actualMapBearing: number) => void} calibrateHeading
+ * @property {{offset:number, confidence:number, samples:number, usable:boolean}} heading
+ *   Auto-learned north offset. `usable` is false until enough agreeing legs
+ *   have been walked, and the map must stay north-up while it is.
  */
 
 /**
@@ -54,7 +58,19 @@ export function useLocalization(options = {}) {
   const compassRef = useRef(/** @type {ReturnType<typeof createCompass> | null} */ (null))
   const rafRef = useRef(0)
 
+  /**
+   * Learns the map/compass north offset from the legs the user walks between
+   * confirmed fixes, removing the need for a per-venue survey.
+   */
+  const calibratorRef = useRef(/** @type {NorthCalibrator | null} */ (null))
+  if (!calibratorRef.current) calibratorRef.current = new NorthCalibrator()
+  const calibrator = calibratorRef.current
+
   const [state, setState] = useState(() => tracker.getState())
+  const [heading, setHeadingState] = useState(
+    /** @type {{offset: number, confidence: number, samples: number, usable: boolean}} */
+    ({ offset: 0, confidence: 0, samples: 0, usable: false })
+  )
   const [isTracking, setIsTracking] = useState(false)
   const [permission, setPermission] = useState(
     /** @type {'idle'|'granted'|'denied'|'unsupported'} */ ('idle')
@@ -94,7 +110,9 @@ export function useLocalization(options = {}) {
     // loop so an anchored dot renders — it simply won't move on its own.
     if (result === 'granted') {
       const pedometer = createPedometer(({ cadenceHz }) => tracker.step(cadenceHz))
-      const compass = createCompass((mapBearing) => tracker.setHeading(mapBearing))
+      const compass = createCompass((mapBearing) => tracker.setHeading(mapBearing), {
+        onRawCompass: (raw) => calibrator.addCompassSample(raw),
+      })
       pedometer.start()
       compass.start()
       pedometerRef.current = pedometer
@@ -124,10 +142,25 @@ export function useLocalization(options = {}) {
 
   const anchor = useCallback(
     (/** @type {Anchor} */ a) => {
+      // Close the leg walked since the last fix. If it was long enough and
+      // straight enough, we just learned something about the venue's
+      // orientation for free — no survey, no calibration step for the user.
+      const before = tracker.getState()
+      const result = calibrator.onAnchor(a, { metresTravelled: before.metresTravelled })
+
       tracker.anchor(a)
       setState(tracker.getState())
+
+      if (result.learned) {
+        const estimate = calibrator.getEstimate()
+        const usable = estimate.confidence >= MIN_USABLE_CONFIDENCE
+        // Only push a learned offset into the compass once we actually trust
+        // it; until then the map stays north-up rather than rotating wrongly.
+        if (usable) compassRef.current?.setNorthOffset(estimate.offset)
+        setHeadingState({ ...estimate, usable })
+      }
     },
-    [tracker]
+    [tracker, calibrator]
   )
 
   const setRoutePath = useCallback(
@@ -159,5 +192,7 @@ export function useLocalization(options = {}) {
     permission,
     sensorsAvailable,
     calibrateHeading,
+    /** Auto-learned map-north estimate; `usable` gates heading-up rotation. */
+    heading,
   }
 }

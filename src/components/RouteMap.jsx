@@ -123,8 +123,10 @@ function Block({ node, labelled, state = 'default', onSelect }) {
  * @param {boolean} [props.isTracking]
  * @param {() => void} [props.onStartTracking] Begin sensor tracking (user gesture).
  * @param {() => void} [props.onReAnchor]      Open the location finder to re-fix.
+ * @param {{offset:number, confidence:number, samples:number, usable:boolean}} [props.heading]
+ *   Auto-learned map-north estimate. Rotation stays off until `usable`.
  */
-export default function RouteMap({ route, onClose, live, isTracking, onStartTracking, onReAnchor }) {
+export default function RouteMap({ route, onClose, live, isTracking, onStartTracking, onReAnchor, heading }) {
   const guidance = route.guidance ?? []
   const [selectedStore, setSelectedStore] = useState(null)
   const [confirmedLandmark, setConfirmedLandmark] = useState(null)
@@ -134,6 +136,13 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
   // prove `liveState` is non-null everywhere it's dereferenced below.
   const liveState = live?.isLocalized && isTracking ? live : null
   const liveActive = liveState !== null
+
+  // Heading-up rotation requires BOTH the user's preference and a north offset
+  // we actually trust. Until the auto-calibrator has seen enough agreeing legs
+  // we leave the map north-up: an unrotated map is merely neutral, whereas a
+  // wrongly-rotated one actively sends people the wrong way.
+  const headingCalibrated = heading?.usable === true
+  const canRotate = liveActive && headingUp && headingCalibrated
 
   // The session owns step progression, live distance/ETA and spoken guidance,
   // so the map and the voice can never describe different steps.
@@ -349,7 +358,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
                 width: PLANE_W,
                 height: PLANE_H,
                 transform: `rotateX(52deg) rotateZ(${
-                  liveActive && headingUp ? -liveState.headingDeg - 10 : -10
+                  canRotate ? -liveState.headingDeg - 10 : -10
                 }deg)`,
                 transformStyle: 'preserve-3d',
                 transition: 'transform 220ms linear',
@@ -429,8 +438,10 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
                           <animate attributeName="r" values="10;20;10" dur="2.4s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* Heading cone — only meaningful once the compass has a fix. */}
-                      {liveActive && (
+                      {/* Heading cone — hidden until calibration is trusted,
+                          because an arrow pointing the wrong way is worse
+                          than no arrow at all. */}
+                      {liveActive && headingCalibrated && (
                         <g transform={`rotate(${liveState.headingDeg})`}>
                           <path d="M -9 -4 L 0 -26 L 9 -4 Z" fill="#38C7D8" fillOpacity=".55" />
                         </g>
@@ -659,6 +670,10 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
           >
             <p className="font-display text-[16.5px] leading-snug text-ivory/90">{g.text}</p>
           </button>
+          {/* When live tracking is driving the route, steps advance by
+              themselves — NEXT demotes to a quiet manual override for when
+              dead reckoning stalls (phone pocketed, sensors denied). It is
+              never removed, because being stuck is worse than being cluttered. */}
           <button
             onClick={() => {
               setConfirmedLandmark(null)
@@ -666,14 +681,26 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
               if (last) onClose()
               else session.next()
             }}
-            className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-champagne/60 bg-champagne/10 px-4 text-[12.5px] font-extrabold tracking-wide text-champagne-soft cursor-pointer active:bg-champagne/25"
+            className={`flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border px-4 text-[12.5px] font-extrabold tracking-wide cursor-pointer ${
+              liveActive && !last
+                ? 'border-ivory/20 text-ivory/55 active:bg-ivory/10'
+                : 'border-champagne/60 bg-champagne/10 text-champagne-soft active:bg-champagne/25'
+            }`}
           >
-            {last ? 'DONE' : 'NEXT'}
+            {last ? 'DONE' : liveActive ? 'SKIP' : 'NEXT'}
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
               <path d="M9 6l6 6-6 6" />
             </svg>
           </button>
         </div>
+
+        {liveActive && !last && (
+          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-cyan/80">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan" />
+            Advancing automatically as you walk
+            {!headingCalibrated && ' · learning which way the mall faces'}
+          </p>
+        )}
 
         {/* Live tracking is opt-in and must start from a real tap: iOS only
             grants motion permission from inside a user gesture. */}

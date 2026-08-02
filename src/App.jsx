@@ -8,6 +8,7 @@ import BotFab from './components/BotFab.jsx'
 import BotSheet from './components/BotSheet.jsx'
 import RouteMap from './components/RouteMap.jsx'
 import LocationFinder from './components/LocationFinder.jsx'
+import DestinationFinder from './components/DestinationFinder.jsx'
 import { trackEvent } from './lib/analytics.js'
 
 export default function App() {
@@ -53,6 +54,8 @@ export default function App() {
   const localization = useLocalization()
   /** Mid-route re-fix. Rendered above the map so navigation is never torn down. */
   const [reAnchoring, setReAnchoring] = useState(false)
+  /** Full searchable catalogue, opened from the explorer's "see all". */
+  const [browsingAll, setBrowsingAll] = useState(false)
 
   /**
    * Accept a confirmed fix from LocationFinder and (re)start dead reckoning.
@@ -117,7 +120,7 @@ export default function App() {
               context={exploreFloor?.short ? `${exploreFloor.short} floor` : undefined}
             />
             <div className="relative min-h-0 flex-1">
-              <FloorExplorer onStoreTap={handleStoreTap} onFloorChange={setExploreFloor} />
+              <FloorExplorer onStoreTap={handleStoreTap} onFloorChange={setExploreFloor} onSeeAll={() => setBrowsingAll(true)} />
             </div>
             <AnimatePresence>
               {botOpen ? (
@@ -157,6 +160,21 @@ export default function App() {
               getMotion={localization.getMotion}
               onReAnchor={() => setReAnchoring(true)}
               onClose={() => setActiveRoute(null)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* The explorer shows a curated 16 per floor; this is where the rest
+            of the catalogue lives, searchable rather than scrollable. */}
+        <AnimatePresence>
+          {browsingAll && (
+            <DestinationFinder
+              key="browse-all"
+              onPick={(store) => {
+                setBrowsingAll(false)
+                handleStoreTap(store)
+              }}
+              onCancel={() => setBrowsingAll(false)}
             />
           )}
         </AnimatePresence>

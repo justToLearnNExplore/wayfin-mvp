@@ -19,7 +19,26 @@ const floorVariants = {
   }),
 }
 
-export default function FloorExplorer({ onStoreTap, onFloorChange }) {
+/**
+ * How many cards the 4-column grid can show without overflowing a phone.
+ *
+ * The official map data brought some floors to 38 stores; at four across that
+ * is ten rows, which ran off the bottom of the screen with nothing to scroll —
+ * the last two rows were literally untappable. Scrolling cannot be the answer
+ * here because the drag-to-change-floor gesture lives on this same element and
+ * the two would fight. So the explorer stays a browsing surface and hands the
+ * long tail to the searchable destination screen, which exists for exactly
+ * that and does it better.
+ */
+const CARDS_PER_FLOOR = 16
+
+/** Offers first — this grid is captioned "popular now", so lead with the deals. */
+const featured = (stores) =>
+  [...stores]
+    .sort((a, b) => (b.discount ?? -1) - (a.discount ?? -1))
+    .slice(0, CARDS_PER_FLOOR)
+
+export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
   const [[index, direction], setFloor] = useState([0, 0])
   const floor = FLOORS[index]
 
@@ -86,12 +105,22 @@ export default function FloorExplorer({ onStoreTap, onFloorChange }) {
             </h2>
 
             <div className="mx-auto mt-7 grid w-full max-w-[360px] grid-cols-4 gap-2.5 pr-6">
-              {floor.stores.map((store, i) => (
+              {featured(floor.stores).map((store, i) => (
                 <StoreCard key={`${floor.id}-${store.name}`} store={store} index={i} onTap={onStoreTap} />
               ))}
             </div>
 
-            <p className="mt-7 text-center text-[11px] text-ivory/40">
+            {floor.stores.length > CARDS_PER_FLOOR && onSeeAll && (
+              <button
+                onClick={() => onSeeAll(floor.id)}
+                className="mx-auto mt-4 flex min-h-11 items-center gap-1.5 rounded-full border border-champagne/45 bg-champagne/8 px-5 text-[12px] font-bold text-champagne-soft cursor-pointer active:bg-champagne/20"
+              >
+                See all {floor.stores.length} on this floor
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
+            )}
+
+            <p className="mt-5 text-center text-[11px] text-ivory/40">
               {index < FLOORS.length - 1 ? 'Drag up for the next floor' : 'Top of the mall'} · Tap a store to ask wayFin
             </p>
           </motion.div>

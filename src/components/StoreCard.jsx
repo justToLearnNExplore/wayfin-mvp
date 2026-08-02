@@ -50,10 +50,21 @@ export default function StoreCard({ store, index, onTap }) {
             background: 'linear-gradient(160deg, rgba(124,92,255,.25), rgba(232,74,138,.3))',
           }}
         >
-          <span className="font-display text-[20px] leading-none text-champagne-soft">
-            {store.discount}%
-          </span>
-          <span className="mt-0.5 text-[8.5px] font-bold tracking-[0.25em] text-ivory/80">OFF</span>
+          {/* Most stores carry no offer, so the back cannot assume one exists —
+              it used to render a bare "%OFF" with nothing in front of it. When
+              there is no discount, show what the shop actually is instead. */}
+          {store.discount ? (
+            <>
+              <span className="font-display text-[20px] leading-none text-champagne-soft">
+                {store.discount}%
+              </span>
+              <span className="mt-0.5 text-[8.5px] font-bold tracking-[0.25em] text-ivory/80">OFF</span>
+            </>
+          ) : (
+            <span className="px-1 text-[9px] font-bold uppercase leading-tight tracking-[0.12em] text-ivory/85">
+              {store.category}
+            </span>
+          )}
         </div>
       </motion.div>
     </motion.button>

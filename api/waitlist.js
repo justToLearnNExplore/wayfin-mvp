@@ -17,6 +17,7 @@
 // Credentials live only in the server env. Nothing here is bundled into the PWA.
 
 import { validateEntry } from '../src/services/waitlist/validate.js'
+import { notifySignup } from '../src/services/waitlist/notify.js'
 
 /** Signups permitted from one IP per window. */
 const RATE_LIMIT = 5
@@ -95,13 +96,23 @@ export default async function handler(req, res) {
     }
 
     const [total] = await redis(config, [['SCARD', EMAILS_KEY]])
+    const position = Number(total) || 1
+
+    // Only ping the operator for genuinely new people — a refresh or a
+    // double-tap should not send a second email about the same lead.
+    //
+    // Awaited rather than fired and forgotten: a serverless function is frozen
+    // the moment it responds, so an un-awaited promise would simply be killed.
+    // notifySignup swallows its own errors and is time-boxed, so this can
+    // neither fail nor meaningfully delay a signup that is already stored.
+    if (isNew === 1) await notifySignup(entry, position)
 
     return res.status(200).json({
       ok: true,
       // False on a repeat signup, so the UI can say "you're already on the
       // list" instead of implying a second place was taken.
       added: isNew === 1,
-      position: Number(total) || 1,
+      position,
     })
   } catch {
     return res.status(502).json({ error: 'store_failed' })

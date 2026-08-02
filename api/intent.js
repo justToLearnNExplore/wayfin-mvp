@@ -1,13 +1,16 @@
 // Vercel serverless function: /api/intent
-// Holds the Gemini key server-side (env var GEMINI_API_KEY — never shipped to
-// the client) and converts free text into a structured intent. It knows the
-// full store/landmark catalog so the model can fuzzy-map phrases like
-// "the Apple reseller" → IMAGINE. It NEVER computes routes — that stays in
-// the deterministic engine on the client.
+//
+// Converts free text into a structured intent. It knows the full
+// store/landmark catalogue so the model can fuzzy-map phrases like "the Apple
+// reseller" → IMAGINE. It NEVER computes routes — that stays in the
+// deterministic engine on the client.
+//
+// Provider-agnostic: runs on whichever LLM key is configured (see
+// ../src/services/llm/provider.js). The key lives only in the server env and
+// is never shipped to the PWA.
 
 import { FLOORS, LANDMARKS, PARKING_NODES } from '../src/data/stores.js'
-
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+import { resolveProvider, generateJson, LlmError } from '../src/services/llm/provider.js'
 
 const STORE_LINES = FLOORS.flatMap((f) =>
   f.stores.map((s) => `- ${s.name} (${s.category}, ${f.label})`)
@@ -49,21 +52,23 @@ Rules:
 - confidence: 0..1. If you are not sure which catalogue entry the user means, use confidence below 0.6.
 - Unmatched fields must be null. Reply with JSON only, matching the response schema exactly.`
 
-// Gemini structured-output schema (OpenAPI subset: uppercase types, `nullable`
-// flag instead of union types).
+// Standard JSON Schema. The provider layer translates it to Gemini's
+// OpenAPI-subset dialect when that backend is in use, so this stays in one
+// form regardless of who answers.
 const SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
+  additionalProperties: false,
   properties: {
     intent: {
-      type: 'STRING',
+      type: 'string',
       enum: ['navigate', 'friend', 'parking', 'offers', 'store_search', 'unknown'],
     },
-    origin: { type: 'STRING', nullable: true },
-    destination: { type: 'STRING', nullable: true },
-    category: { type: 'STRING', nullable: true },
-    friendLocation: { type: 'STRING', nullable: true },
-    parkingLevel: { type: 'STRING', nullable: true },
-    confidence: { type: 'NUMBER' },
+    origin: { type: ['string', 'null'] },
+    destination: { type: ['string', 'null'] },
+    category: { type: ['string', 'null'] },
+    friendLocation: { type: ['string', 'null'] },
+    parkingLevel: { type: ['string', 'null'] },
+    confidence: { type: 'number' },
   },
   required: ['intent', 'origin', 'destination', 'category', 'friendLocation', 'parkingLevel', 'confidence'],
 }
@@ -71,40 +76,28 @@ const SCHEMA = {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
-  const key = process.env.GEMINI_API_KEY
-  if (!key) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' })
+  const provider = resolveProvider()
+  // Reported honestly so the client falls back to offline keyword matching
+  // rather than showing the user a broken chat.
+  if (!provider) return res.status(503).json({ error: 'llm_not_configured' })
 
   const message = typeof req.body?.message === 'string' ? req.body.message.trim() : ''
   if (!message || message.length > 300) return res.status(400).json({ error: 'bad message' })
 
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: INSTRUCTIONS }] },
-          contents: [{ role: 'user', parts: [{ text: message }] }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 300,
-            responseMimeType: 'application/json',
-            responseSchema: SCHEMA,
-          },
-        }),
-      }
-    )
-    if (!r.ok) {
-      const detail = await r.text()
-      return res.status(502).json({ error: 'llm_error', detail: detail.slice(0, 900) })
-    }
-    const data = await r.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) return res.status(502).json({ error: 'empty_response' })
-    const parsed = JSON.parse(text)
+    const parsed = await generateJson({
+      provider,
+      instructions: INSTRUCTIONS,
+      userText: message,
+      schema: SCHEMA,
+      schemaName: 'wayfin_intent',
+      maxTokens: 300,
+    })
     return res.status(200).json(parsed)
-  } catch {
+  } catch (err) {
+    if (err instanceof LlmError) {
+      return res.status(502).json({ error: `llm_${err.kind}`, detail: err.detail })
+    }
     return res.status(500).json({ error: 'parse_failed' })
   }
 }

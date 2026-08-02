@@ -6,10 +6,11 @@
 // NOT call this endpoint — the live demo uses a deterministic local stub so
 // the price-match flow can never fail on stage. This route is kept ready for
 // when the team wants to flip on live multi-SKU vision matching.
+//
+// Provider-agnostic: runs on whichever LLM key is configured.
 
 import { PRODUCTS } from '../src/data/products.js'
-
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+import { resolveProvider, generateJson, parseDataUrl, LlmError } from '../src/services/llm/provider.js'
 
 const CATALOGUE = PRODUCTS.map(
   (product) =>
@@ -31,63 +32,50 @@ Rules:
 Reply with JSON only, matching the response schema exactly.`
 
 const SCHEMA = {
-  type: 'OBJECT',
+  type: 'object',
+  additionalProperties: false,
   properties: {
-    productId: { type: 'STRING', nullable: true },
-    confidence: { type: 'NUMBER' },
+    productId: { type: ['string', 'null'] },
+    confidence: { type: 'number' },
   },
   required: ['productId', 'confidence'],
 }
 
+/** A non-null match must clear this before we will show it as the same item. */
+const MATCH_CONFIDENCE = 0.82
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
 
-  const key = process.env.GEMINI_API_KEY
-  if (!key) return res.status(503).json({ error: 'GEMINI_API_KEY not configured' })
+  const provider = resolveProvider()
+  if (!provider) return res.status(503).json({ error: 'llm_not_configured' })
 
   const image = typeof req.body?.image === 'string' ? req.body.image : ''
-  const match = /^data:(image\/(?:jpeg|jpg|png|webp));base64,(.+)$/i.exec(image)
-  if (!match || image.length > 5_500_000) {
+  if (!parseDataUrl(image) || image.length > 5_500_000) {
     return res.status(400).json({ error: 'invalid_image' })
   }
-  const [, mimeType, base64Data] = match
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: INSTRUCTIONS }] },
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                { text: 'Verify this item against the approved catalogue.' },
-                { inline_data: { mime_type: mimeType, data: base64Data } },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 150,
-            responseMimeType: 'application/json',
-            responseSchema: SCHEMA,
-          },
-        }),
-      }
-    )
-    if (!response.ok) return res.status(502).json({ error: 'vision_error' })
+    const parsed = await generateJson({
+      provider,
+      instructions: INSTRUCTIONS,
+      userText: 'Verify this item against the approved catalogue.',
+      image,
+      schema: SCHEMA,
+      schemaName: 'wayfin_product_match',
+      maxTokens: 150,
+    })
 
-    const data = await response.json()
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) return res.status(502).json({ error: 'empty_response' })
-    const parsed = JSON.parse(text)
+    // ---- validation boundary -------------------------------------------
+    // The id must exist in OUR catalogue. A hallucinated id is discarded
+    // rather than surfaced as a match.
     const product = PRODUCTS.find((item) => item.id === parsed.productId)
-    const exactMatch = product && parsed.confidence >= 0.82
+    const exactMatch = product && parsed.confidence >= MATCH_CONFIDENCE
     return res.status(200).json({ productId: exactMatch ? product.id : null })
-  } catch {
+  } catch (err) {
+    if (err instanceof LlmError) {
+      return res.status(502).json({ error: `llm_${err.kind}`, detail: err.detail })
+    }
     return res.status(500).json({ error: 'match_failed' })
   }
 }

@@ -152,7 +152,7 @@ const DESTINATION_RE = /\b(?:take me|go to|going to|get me|route|navigate|direct
  * PUMA" is fundamentally a request to go somewhere, and the origin half is
  * recovered separately by resolving the place names.
  *
- * @param {string} text
+ * @param {string | null | undefined} text
  * @returns {'origin' | 'destination' | null} null when the phrasing gives no clue.
  */
 export function phraseTarget(text) {

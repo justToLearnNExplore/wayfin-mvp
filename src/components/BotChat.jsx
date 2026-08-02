@@ -60,9 +60,19 @@ const getParking = () => {
 const parkTime = (p) =>
   new Date(p.time).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
 
-// Resolve an LLM-returned name against the real catalogue (landmarks first,
-// then stores). The parser's output is never trusted blindly — anything that
-// doesn't resolve here is treated as low confidence.
+/**
+ * Resolve an LLM-returned name against the real catalogue (landmarks first,
+ * then stores). The parser's output is never trusted blindly — anything that
+ * doesn't resolve here is discarded.
+ *
+ * Explicitly typed because it is passed as a callback into fillSlots. Without
+ * an annotation the checker inferred its signature from whichever call site it
+ * saw first and then rejected the others.
+ *
+ * @param {string | null | undefined} name
+ * @param {string | null} [parkingLevel]
+ * @returns {{id: string, name: string, floor: string} | null}
+ */
 const resolveNode = (name, parkingLevel = null) => {
   if (!name) return null
   const q = name.trim().toLowerCase()
@@ -511,8 +521,9 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
     // A message that only told us where the user is: acknowledge it and ask
     // for the one thing still missing, rather than treating it as a dead end.
-    if (merged.filled.includes('origin') && !merged.slots.destination) {
-      flow.current.originPreset = merged.slots.origin.id
+    const mergedOrigin = merged.slots.origin
+    if (mergedOrigin && merged.filled.includes('origin') && !merged.slots.destination) {
+      flow.current.originPreset = mergedOrigin.id
       flow.current.phase = 'askCategory'
       botSay(
         acknowledge(merged.slots, merged.filled),

@@ -6,6 +6,7 @@ import { findProductById } from '../data/products.js'
 import { parseIntent } from '../services/intentParser.js'
 import { matchProductImage } from '../services/productMatcher.js'
 import { trackEvent } from '../lib/analytics.js'
+import { rankCandidates } from '../services/localization/candidates.js'
 import Scanner from './Scanner.jsx'
 import WaitlistSheet, { JOINED_KEY } from './WaitlistSheet.jsx'
 import LocationFinder from './LocationFinder.jsx'
@@ -73,8 +74,9 @@ const resolveNode = (name, parkingLevel = null) => {
   return findStoreNode(name)
 }
 
-// Local fuzzy candidates for the "did you mean…" fallback.
-// Punctuation-insensitive so "levis" matches "LEVI'S".
+// Local fuzzy candidates for the "did you mean…" fallback live in
+// ../services/localization/candidates.js, with tests — the naive version here
+// once offered MANYAVAR for "any gucci store".
 const norm = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '')
 const parkingOriginFromText = (text) => {
   const level = text.match(/\bP\s?([1-3])\b/i)?.[1]
@@ -86,22 +88,7 @@ const storeMentionedIn = (text) => {
   const query = norm(text)
   return allStores().find((node) => query.includes(norm(node.name))) ?? null
 }
-const suggestCandidates = (text) => {
-  const q = norm(text || '').trim()
-  if (!q) return []
-  return allStores()
-    .map((n) => {
-      const name = norm(n.name)
-      let score = 0
-      if (name.includes(q) || q.includes(name)) score += 2
-      for (const w of q.split(/\s+/)) if (w.length > 2 && name.includes(w)) score += 1
-      return [score, n]
-    })
-    .filter(([s]) => s > 0)
-    .sort((a, b) => b[0] - a[0])
-    .slice(0, 3)
-    .map(([, n]) => n)
-}
+const suggestCandidates = (text) => rankCandidates(text, allStores())
 
 export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpenRoute, onAnchor, onEnter, onExpand }) {
   const [msgs, setMsgs] = useState([])

@@ -218,10 +218,26 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
     })
   }, [handleMatches])
 
+  // The listener is started ONCE per entry to the voice screen.
+  //
+  // This effect must not depend on `startListening`'s identity. That callback
+  // is rebuilt whenever `onLocated` changes, and App passes `onLocated` as an
+  // inline arrow — so it changes on every App render, and App re-renders at
+  // 15 Hz while live positioning is running. Depending on it meant the effect
+  // tore down and restarted recognition fifteen times a second. On Android
+  // every `recognition.start()` plays the system chime, which is the beeping
+  // and the frozen, unclickable screen.
+  //
+  // Held in a ref so the effect always calls the current closure while
+  // depending only on `screen`.
+  const startListeningRef = useRef(startListening)
+  startListeningRef.current = startListening
+
   useEffect(() => {
-    if (screen === 'voice') startListening()
+    if (screen !== 'voice') return undefined
+    startListeningRef.current()
     return () => voiceRef.current?.recognizer.stop()
-  }, [screen, startListening])
+  }, [screen])
 
   // ---- text -------------------------------------------------------------
   const submitText = useCallback(

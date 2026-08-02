@@ -51,6 +51,23 @@ export default function App() {
     [localization]
   )
 
+  /**
+   * Finish a mid-route re-fix.
+   *
+   * Stable by construction. This component re-renders at 15 Hz while live
+   * positioning runs, so an inline arrow here would hand LocationFinder a new
+   * prop identity on every frame — which previously cascaded into restarting
+   * speech recognition fifteen times a second.
+   * @param {import('./services/localization/tracker.js').Anchor} anchor
+   */
+  const handleReAnchored = useCallback(
+    (anchor) => {
+      handleAnchor(anchor)
+      setReAnchoring(false)
+    },
+    [handleAnchor]
+  )
+
   // Constrain the estimate to the active route so lateral drift is absorbed.
   useEffect(() => {
     if (!activeRoute?.path) return localization.setRoutePath(null)
@@ -126,10 +143,7 @@ export default function App() {
             <LocationFinder
               key="re-anchor"
               destinationName={activeRoute?.dest?.name}
-              onLocated={(anchor) => {
-                handleAnchor(anchor)
-                setReAnchoring(false)
-              }}
+              onLocated={handleReAnchored}
               onCancel={() => setReAnchoring(false)}
             />
           )}

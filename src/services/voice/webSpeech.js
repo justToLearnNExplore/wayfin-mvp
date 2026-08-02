@@ -42,6 +42,14 @@ export function createWebSpeechRecognizer(options = {}) {
         handlers.onError?.('not-supported')
         return
       }
+      // Already listening — ignore rather than stacking a second session.
+      //
+      // Android Chrome plays an audible chime on every start(), so a caller
+      // that re-invokes this in a render loop produces a machine-gun beep and
+      // a UI too busy to accept a tap. A caller bug should not be able to do
+      // that, so the guard lives here as well as at the call site.
+      if (active) return
+
       // Recreate per session: reusing an instance after `stop()` is unreliable
       // across browsers.
       const recognition = new Ctor()

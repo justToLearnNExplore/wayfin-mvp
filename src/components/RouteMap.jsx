@@ -6,6 +6,7 @@ import { useNavigationSession } from '../services/navigation/useNavigationSessio
 import { requestMotionPermission } from '../services/sensors/permissions.js'
 import { useAutoRelocalize } from '../services/vision/useAutoRelocalize.js'
 import { MAX_SCANS_PER_SESSION } from '../services/vision/autoRelocalizer.js'
+import { makeLabelFilter, labelPlan } from '../services/navigation/labelTiers.js'
 
 // ---------- premium 3D mall world (After Dark) ----------
 // A tilted extruded-block mall rendered in CSS 3D. The camera follows the
@@ -202,16 +203,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
   const points = floorPath.map(pt)
   const pathD = points.length > 1 ? `M ${points.map((p) => `${p.x} ${p.y}`).join(' L ')}` : ''
 
-  // Route stops, structural points, and a compact nearby set remain legible on mobile.
-  const onRoute = new Set(route.path.map((n) => n.name))
-  const nearbyStoreNames = new Set(
-    floorNodes(floorId)
-      .filter((n) => n.type === 'store')
-      .sort((a, b) => Math.hypot(a.x - currentPosition.x, a.y - currentPosition.y) - Math.hypot(b.x - currentPosition.x, b.y - currentPosition.y))
-      .slice(0, 4)
-      .map((n) => n.name)
-  )
-  const labelled = (n) => onRoute.has(n.name) || nearbyStoreNames.has(n.name) || n.type !== 'store'
+  const onRoute = useMemo(() => new Set(route.path.map((n) => n.name)), [route.path])
   const blockState = (n) => {
     if (n.name === selectedStore?.name && selectedStore.floor === floorId) return 'selected'
     if (n.name === currentPosition.name) return 'current'
@@ -242,6 +234,26 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
   const mapScale = useMotionValue(1)
   const mapScaleSpring = useSpring(mapScale, { stiffness: 220, damping: 26 })
   const [zoomLabel, setZoomLabel] = useState(1)
+
+  // Which names are shown depends on zoom. With 38 stores on a floor, naming
+  // them all at phone size is an unreadable smear, and naming none makes the
+  // map look like it doesn't know the mall — so the overview carries only what
+  // you steer by, and detail arrives as the user asks for it. Proximity wins
+  // within a tier: the shop you can see is the one worth naming.
+  //
+  // Declared after zoomLabel deliberately: the dependency array is evaluated
+  // the moment useMemo is called, so reading zoomLabel above its own const
+  // throws on first render.
+  const labelled = useMemo(
+    () =>
+      makeLabelFilter({
+        zoom: zoomLabel,
+        onRoute,
+        stores: floorNodes(floorId).filter((n) => n.type === 'store'),
+        position: currentPosition,
+      }),
+    [zoomLabel, onRoute, floorId, currentPosition.x, currentPosition.y]
+  )
   const dragRef = useRef(null)
   const pointersRef = useRef(new Map())
   const pinchRef = useRef(null)
@@ -636,6 +648,18 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
               <path d="M12 2l4 9-4-2-4 2 4-9zM12 13v9" />
             </svg>
           </button>
+        )}
+
+        {/* Says that detail exists further in. Without this the overview reads
+            as "this map only knows six places" rather than "it is showing you
+            the six that matter from here". Disappears once fully zoomed, when
+            it would only be stating the obvious. */}
+        {labelPlan(zoomLabel).name !== 'close' && (
+          <div className="pointer-events-none absolute bottom-4 left-16 z-20 rounded-full border border-ivory/12 bg-obsidian/80 px-3 py-1.5 text-[10px] font-semibold tracking-wide text-ivory/45 backdrop-blur-md">
+            {labelPlan(zoomLabel).name === 'overview'
+              ? 'Zoom in for store names'
+              : 'Zoom in for every store'}
+          </div>
         )}
 
         {/* zoom controls */}

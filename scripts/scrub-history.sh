@@ -31,13 +31,17 @@
 set -euo pipefail
 
 # USAGE
-#     ./scripts/scrub-history.sh <phone-digits> <old-email>
+#     ./scripts/scrub-history.sh <phone-digits> <author-email> [other-string ...]
 #
 # The values to scrub are passed in rather than hardcoded, for the obvious
 # reason: a script that removes your phone number from git history must not
 # itself commit your phone number to git history.
 #
-#     ./scripts/scrub-history.sh 91XXXXXXXXXX you@example.com
+#     ./scripts/scrub-history.sh 91XXXXXXXXXX you@example.com project@gmail.com
+#
+# Trailing arguments are extra literal strings to redact from both file
+# contents and commit messages — useful for a contact address that ended up
+# in a commit subject line.
 
 REPO_URL="https://github.com/justToLearnNExplore/wayfin-mvp.git"
 NEW_EMAIL="justToLearnNExplore@users.noreply.github.com"
@@ -46,10 +50,13 @@ PHONE="${1:-}"
 OLD_EMAIL="${2:-}"
 
 if [ -z "$PHONE" ] || [ -z "$OLD_EMAIL" ]; then
-  echo "usage: $0 <phone-digits> <old-email>"
-  echo "   eg: $0 91XXXXXXXXXX you@example.com"
+  echo "usage: $0 <phone-digits> <author-email> [other-string ...]"
+  echo "   eg: $0 91XXXXXXXXXX you@example.com project@gmail.com"
   exit 1
 fi
+
+shift 2
+EXTRA_STRINGS=("$@")
 
 if ! command -v git-filter-repo >/dev/null 2>&1; then
   echo "git-filter-repo is required. Install it with:"
@@ -64,29 +71,47 @@ echo "==> Working in $WORKDIR"
 git clone --mirror "$REPO_URL" "$WORKDIR/wayfin.git"
 cd "$WORKDIR/wayfin.git"
 
-printf '%s==>REDACTED\n' "$PHONE" > "$WORKDIR/replacements.txt"
+{
+  printf '%s==>REDACTED\n' "$PHONE"
+  for s in ${EXTRA_STRINGS+"${EXTRA_STRINGS[@]}"}; do
+    printf '%s==>REDACTED\n' "$s"
+  done
+} > "$WORKDIR/replacements.txt"
 
-# Both rewrites in a single pass: --replace-text scrubs blob contents while
-# --email-callback rewrites the commit metadata.
-echo "==> Scrubbing phone number and rewriting commit identity"
+echo "==> Redacting from file contents and commit messages:"
+sed 's/^/      /' "$WORKDIR/replacements.txt"
+
+# Three rewrites in one pass:
+#   --replace-text    file contents (blobs)
+#   --replace-message commit messages — a separate flag, because --replace-text
+#                     does NOT touch them, and one of ours names an address in
+#                     its subject line
+#   --email-callback  commit author/committer metadata
 git filter-repo --force \
   --replace-text "$WORKDIR/replacements.txt" \
+  --replace-message "$WORKDIR/replacements.txt" \
   --email-callback "return b'${NEW_EMAIL}' if email == b'${OLD_EMAIL}' else email"
 
 echo
 echo "==> Verifying"
 
-if git grep -q "$PHONE" $(git rev-list --all) -- 2>/dev/null; then
-  echo "    FAILED: the number is still present in some blob. Do not push."
-  exit 1
-fi
-echo "    phone number ....... gone from all blobs"
+for needle in "$PHONE" ${EXTRA_STRINGS+"${EXTRA_STRINGS[@]}"}; do
+  if git grep -qF "$needle" $(git rev-list --all) -- 2>/dev/null; then
+    echo "    FAILED: '$needle' still present in a blob. Do not push."
+    exit 1
+  fi
+  if git log --all --format='%B' | grep -qF "$needle"; then
+    echo "    FAILED: '$needle' still present in a commit message. Do not push."
+    exit 1
+  fi
+  echo "    redacted everywhere ... $needle"
+done
 
 if git log --all --format='%ae%n%ce' | grep -qF "$OLD_EMAIL"; then
-  echo "    FAILED: the personal email is still on some commits. Do not push."
+  echo "    FAILED: the author email is still on some commits. Do not push."
   exit 1
 fi
-echo "    personal email ..... gone from all commits"
+echo "    author email ......... rewritten to $NEW_EMAIL"
 
 echo
 echo "==> Done. NOTHING HAS BEEN PUSHED."

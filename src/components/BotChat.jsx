@@ -12,6 +12,7 @@ import { resolveLocationText } from '../services/localization/textResolver.js'
 import Scanner from './Scanner.jsx'
 import WaitlistSheet, { JOINED_KEY } from './WaitlistSheet.jsx'
 import LocationFinder from './LocationFinder.jsx'
+import DestinationFinder from './DestinationFinder.jsx'
 import { SendIcon } from './icons.jsx'
 
 const hasJoinedWaitlist = () => {
@@ -109,6 +110,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const [scanning, setScanning] = useState(false)
   const [waitlisting, setWaitlisting] = useState(false)
   const [locating, setLocating] = useState(false)
+  const [choosingDest, setChoosingDest] = useState(false)
   /** Which flow is waiting on the location answer. @type {{current: 'route'|'friend'|'car'}} */
   const locateModeRef = useRef(/** @type {'route'|'friend'|'car'} */ ('route'))
   const flow = useRef({ phase: 'idle', dest: null })
@@ -165,6 +167,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const idleOptions = (skipExplore = false) =>
     [
       onEnter && { id: 'enter', label: 'Enter the mall →' },
+      { id: 'destination', label: 'Take me somewhere →' },
       !skipExplore && { id: 'explore', label: 'Explore the stores' },
       { id: 'friend', label: 'Locate your friend' },
       { id: 'scan', label: 'Check a price' },
@@ -265,7 +268,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.phase = 'askCategory'
       botSay(
         'What are you in the mood for?',
-        CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
       )
       return
     }
@@ -278,6 +281,12 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         `Here's where ${cat.toLowerCase()} lives in Orion:`,
         stores.map((n) => ({ id: `dest:${n.id}`, label: `${n.name} · ${short(n.floor)}` }))
       )
+      return
+    }
+
+    if (opt.id === 'destination') {
+      trackEvent('destination_finder_opened')
+      setChoosingDest(true)
       return
     }
 
@@ -527,7 +536,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.phase = 'askCategory'
       botSay(
         acknowledge(merged.slots, merged.filled),
-        CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
       )
       return true
     }
@@ -556,7 +565,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           flow.current.phase = 'askCategory'
           botSay(
             `Got it — you're near ${origin.name}. Where do you want to go?`,
-            CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+            [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
           )
           return true
         }
@@ -686,7 +695,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         flow.current.phase = 'askCategory'
         botSay(
           acknowledge(slots.current, ['origin']),
-          CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c }))
+          [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
         )
         return
       }
@@ -830,6 +839,16 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
       {scanning && <Scanner onMatch={handleProductMatch} onClose={() => setScanning(false)} />}
       {waitlisting && <WaitlistSheet onClose={() => setWaitlisting(false)} />}
+      {choosingDest && (
+        <DestinationFinder
+          originName={slots.current.origin?.name}
+          onPick={(store) => {
+            setChoosingDest(false)
+            choose({ id: `dest:${store.id}`, label: store.name })
+          }}
+          onCancel={() => setChoosingDest(false)}
+        />
+      )}
       {locating && (
         <LocationFinder
           destinationName={locateModeRef.current === 'route' ? flow.current.dest?.name : undefined}

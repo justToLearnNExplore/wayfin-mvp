@@ -7,14 +7,13 @@ import { parseIntent } from '../services/intentParser.js'
 import { matchProductImage } from '../services/productMatcher.js'
 import { trackEvent } from '../lib/analytics.js'
 import Scanner from './Scanner.jsx'
-import RateSheet from './RateSheet.jsx'
+import WaitlistSheet, { JOINED_KEY } from './WaitlistSheet.jsx'
 import LocationFinder from './LocationFinder.jsx'
 import { SendIcon } from './icons.jsx'
 
-const RATED_KEY = 'wayfin_rated'
-const hasRated = () => {
+const hasJoinedWaitlist = () => {
   try {
-    return localStorage.getItem(RATED_KEY) === '1'
+    return localStorage.getItem(JOINED_KEY) === '1'
   } catch {
     return false
   }
@@ -109,7 +108,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const [options, setOptions] = useState([])
   const [input, setInput] = useState('')
   const [scanning, setScanning] = useState(false)
-  const [rating, setRating] = useState(false)
+  const [waitlisting, setWaitlisting] = useState(false)
   const [locating, setLocating] = useState(false)
   /** Which flow is waiting on the location answer. @type {{current: 'route'|'friend'|'car'}} */
   const locateModeRef = useRef(/** @type {'route'|'friend'|'car'} */ ('route'))
@@ -168,7 +167,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       getParking()
         ? { id: 'car', label: "I'm leaving — where's my car? 🚗" }
         : { id: 'parking', label: 'Save my parking' },
-      !hasRated() && { id: 'rate', label: '⭐ Rate wayFin' },
+      !hasJoinedWaitlist() && { id: 'waitlist', label: '✦ Join the waitlist' },
     ].filter(Boolean)
 
   /**
@@ -385,10 +384,10 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       return
     }
 
-    // ---- rate wayFin ----
-    if (opt.id === 'rate') {
-      trackEvent('rate_sheet_opened')
-      setRating(true)
+    // ---- waitlist ----
+    if (opt.id === 'waitlist') {
+      trackEvent('waitlist_opened')
+      setWaitlisting(true)
       return
     }
 
@@ -719,7 +718,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       </form>
 
       {scanning && <Scanner onMatch={handleProductMatch} onClose={() => setScanning(false)} />}
-      {rating && <RateSheet onClose={() => setRating(false)} />}
+      {waitlisting && <WaitlistSheet onClose={() => setWaitlisting(false)} />}
       {locating && (
         <LocationFinder
           destinationName={locateModeRef.current === 'route' ? flow.current.dest?.name : undefined}

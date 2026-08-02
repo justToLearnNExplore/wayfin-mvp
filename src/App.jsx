@@ -110,6 +110,8 @@ export default function App() {
               isTracking={localization.isTracking}
               onStartTracking={localization.startTracking}
               heading={localization.heading}
+              onAnchor={handleAnchor}
+              getMotion={localization.getMotion}
               onReAnchor={() => setReAnchoring(true)}
               onClose={() => setActiveRoute(null)}
             />

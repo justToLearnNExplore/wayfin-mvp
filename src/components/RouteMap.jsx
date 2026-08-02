@@ -4,6 +4,8 @@ import { FLOORS, LANDMARKS, PARKING_LEVELS, PARKING_NODES } from '../data/stores
 import { floorLabelOf, X_METERS } from '../lib/routing.js'
 import { useNavigationSession } from '../services/navigation/useNavigationSession.js'
 import { requestMotionPermission } from '../services/sensors/permissions.js'
+import { useAutoRelocalize } from '../services/vision/useAutoRelocalize.js'
+import { MAX_SCANS_PER_SESSION } from '../services/vision/autoRelocalizer.js'
 
 // ---------- premium 3D mall world (After Dark) ----------
 // A tilted extruded-block mall rendered in CSS 3D. The camera follows the
@@ -33,6 +35,10 @@ const floorNodes = (floorId) => [
 ]
 
 const floorIndexOf = (id) => FLOOR_RAIL.indexOf(id)
+
+/** Stand-ins for when the map is rendered without live localization wired in. */
+const noMotion = () => ({ cadenceHz: 0, msSinceLastStep: Infinity })
+const noop = () => {}
 const MIN_ZOOM = 0.65
 const MAX_ZOOM = 2.4
 const clampZoom = (v) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, v))
@@ -125,12 +131,17 @@ function Block({ node, labelled, state = 'default', onSelect }) {
  * @param {() => void} [props.onReAnchor]      Open the location finder to re-fix.
  * @param {{offset:number, confidence:number, samples:number, usable:boolean}} [props.heading]
  *   Auto-learned map-north estimate. Rotation stays off until `usable`.
+ * @param {(anchor: import('../services/localization/tracker.js').Anchor) => void} [props.onAnchor]
+ *   Apply a position fix. Used by automatic re-localization.
+ * @param {() => {cadenceHz: number, msSinceLastStep: number}} [props.getMotion]
+ *   Live gait, polled by the auto-scan gate.
  */
-export default function RouteMap({ route, onClose, live, isTracking, onStartTracking, onReAnchor, heading }) {
+export default function RouteMap({ route, onClose, live, isTracking, onStartTracking, onReAnchor, heading, onAnchor, getMotion }) {
   const guidance = route.guidance ?? []
   const [selectedStore, setSelectedStore] = useState(null)
   const [confirmedLandmark, setConfirmedLandmark] = useState(null)
   const [headingUp, setHeadingUp] = useState(true)
+  const [autoScan, setAutoScan] = useState(false)
 
   // Narrowed const rather than a boolean flag: this lets the type checker
   // prove `liveState` is non-null everywhere it's dereferenced below.
@@ -151,6 +162,23 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
     position: liveActive ? { x: liveState.x, y: liveState.y, floor: liveState.floor } : null,
     isLocalized: liveActive,
   })
+
+  // Opt-in background camera re-anchoring. Off by default: it spends money and
+  // battery, and a camera that switches itself on unannounced is not something
+  // to surprise anyone with.
+  const auto = useAutoRelocalize({
+    enabled: autoScan && liveActive,
+    position: liveState,
+    getMotion: getMotion ?? noMotion,
+    onAnchor: onAnchor ?? noop,
+  })
+
+  /** Toggling on is the user gesture that carries the permission prompt. */
+  const toggleAutoScan = async () => {
+    if (autoScan) return setAutoScan(false)
+    const ok = await auto.requestPermission()
+    setAutoScan(ok)
+  }
   const stepIdx = session.stepIndex
   const setStepIdx = session.goToStep
 
@@ -512,7 +540,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
         {/* Drift prompt: the halo has grown past the point where it can tell
             neighbouring shopfronts apart, so invite a re-fix. Navigation is
             never interrupted — this is an offer, not a modal. */}
-        {liveActive && liveState.needsReAnchor && onReAnchor && (
+        {liveActive && liveState.needsReAnchor && onReAnchor && !auto.suggestion && (
           <motion.button
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -526,6 +554,72 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
             Scan a shopfront to re-centre
           </motion.button>
         )}
+
+        {/* Auto re-centre. Off by default; see useAutoRelocalize for why. */}
+        {liveActive && onAnchor && (
+          <button
+            type="button"
+            onClick={toggleAutoScan}
+            aria-pressed={autoScan}
+            aria-label={autoScan ? 'Turn off automatic camera re-centring' : 'Turn on automatic camera re-centring'}
+            className={`absolute right-3 top-[3.75rem] z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
+              autoScan ? 'border-cyan/50 bg-cyan/15 text-cyan' : 'border-ivory/15 bg-obsidian/85 text-ivory/70'
+            }`}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+              <path d="M3 8V6a2 2 0 0 1 2-2h2M17 4h2a2 2 0 0 1 2 2v2M21 16v2a2 2 0 0 1-2 2h-2M7 20H5a2 2 0 0 1-2-2v-2" />
+              <circle cx="12" cy="12" r="3.2" />
+            </svg>
+            {/* Live capture indicator — the camera never runs invisibly. */}
+            {auto.status.scanning && (
+              <motion.span
+                className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-cyan"
+                animate={{ opacity: [1, 0.25, 1] }}
+                transition={{ duration: 1.1, repeat: Infinity }}
+              />
+            )}
+          </button>
+        )}
+
+        {/* Off-screen sink for the capture stream. Must stay in the document
+            for iOS to deliver frames, so it is hidden rather than unmounted. */}
+        <video
+          ref={auto.videoRef}
+          muted
+          playsInline
+          aria-hidden="true"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+        />
+
+        {/* A recognition we believe but not enough to apply unasked. */}
+        <AnimatePresence>
+          {auto.suggestion && (
+            <motion.div
+              key="auto-suggest"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/40 bg-obsidian/95 py-2 pl-4 pr-2 shadow-xl backdrop-blur-md"
+            >
+              <span className="text-[11.5px] font-bold text-ivory/85">
+                Near {auto.suggestion.label}?
+              </span>
+              <button
+                onClick={auto.acceptSuggestion}
+                className="min-h-9 rounded-full border border-cyan/50 bg-cyan/15 px-3 text-[11px] font-extrabold text-cyan cursor-pointer active:bg-cyan/25"
+              >
+                Yes
+              </button>
+              <button
+                onClick={auto.dismissSuggestion}
+                aria-label="Dismiss"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-ivory/55 cursor-pointer"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* heading-up / north-up toggle */}
         {liveActive && (
@@ -697,8 +791,17 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
         {liveActive && !last && (
           <p className="mt-2 flex items-center gap-1.5 text-[11px] text-cyan/80">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan" />
-            Advancing automatically as you walk
+            {auto.status.scanning ? 'Checking the shopfronts around you' : 'Advancing automatically as you walk'}
             {!headingCalibrated && ' · learning which way the mall faces'}
+          </p>
+        )}
+
+        {/* Report an automatic correction rather than letting the dot jump
+            unexplained, and say plainly when the scan budget is gone. */}
+        {autoScan && auto.status.recentred && (
+          <p className="mt-1.5 text-[11px] text-ivory/50">
+            Re-centred at {auto.status.recentred}
+            {auto.status.scansUsed >= MAX_SCANS_PER_SESSION && ' · auto checks used up for this trip'}
           </p>
         )}
 

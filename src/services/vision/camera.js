@@ -55,6 +55,27 @@ export function closeCamera(stream) {
 }
 
 /**
+ * Draw the current video frame into an offscreen canvas, downscaled so its
+ * longest edge is at most `maxDim`.
+ * @param {HTMLVideoElement} videoEl
+ * @param {number} maxDim
+ * @returns {HTMLCanvasElement | null} null if the video has no frame yet.
+ */
+function drawScaled(videoEl, maxDim) {
+  if (!videoEl?.videoWidth) return null
+
+  const scale = Math.min(1, maxDim / Math.max(videoEl.videoWidth, videoEl.videoHeight))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(videoEl.videoWidth * scale)
+  canvas.height = Math.round(videoEl.videoHeight * scale)
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height)
+  return canvas
+}
+
+/**
  * Grab the current video frame as a compressed JPEG data URL.
  *
  * Downscaled to `maxDim` before encoding: vision models gain nothing from a
@@ -66,16 +87,25 @@ export function closeCamera(stream) {
  * @returns {string | null} data URL, or null if the video has no frame yet.
  */
 export function captureFrame(videoEl, maxDim = 1100, quality = 0.82) {
-  if (!videoEl?.videoWidth) return null
+  const canvas = drawScaled(videoEl, maxDim)
+  return canvas ? canvas.toDataURL('image/jpeg', quality) : null
+}
 
-  const scale = Math.min(1, maxDim / Math.max(videoEl.videoWidth, videoEl.videoHeight))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(videoEl.videoWidth * scale)
-  canvas.height = Math.round(videoEl.videoHeight * scale)
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height)
-
-  return canvas.toDataURL('image/jpeg', quality)
+/**
+ * Grab a thumbnail of the current frame as raw pixels, for local analysis.
+ *
+ * Much smaller than {@link captureFrame} on purpose: this feeds the
+ * frame-quality triage, which runs on every candidate frame and must stay far
+ * cheaper than the upload it is deciding against. Blur and exposure are both
+ * scale-invariant enough to judge at thumbnail size.
+ *
+ * @param {HTMLVideoElement} videoEl
+ * @param {number} [maxDim] Longest edge, in pixels.
+ * @returns {ImageData | null} null if the video has no frame yet.
+ */
+export function captureImageData(videoEl, maxDim = 160) {
+  const canvas = drawScaled(videoEl, maxDim)
+  const ctx = canvas?.getContext('2d')
+  if (!canvas || !ctx) return null
+  return ctx.getImageData(0, 0, canvas.width, canvas.height)
 }

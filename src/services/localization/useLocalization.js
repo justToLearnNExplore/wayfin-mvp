@@ -40,6 +40,8 @@ const PUBLISH_HZ = 15
  * @property {{offset:number, confidence:number, samples:number, usable:boolean}} heading
  *   Auto-learned north offset. `usable` is false until enough agreeing legs
  *   have been walked, and the map must stay north-up while it is.
+ * @property {() => {cadenceHz: number, msSinceLastStep: number}} getMotion
+ *   Current gait, polled rather than published — see `motionRef`.
  */
 
 /**
@@ -65,6 +67,14 @@ export function useLocalization(options = {}) {
   const calibratorRef = useRef(/** @type {NorthCalibrator | null} */ (null))
   if (!calibratorRef.current) calibratorRef.current = new NorthCalibrator()
   const calibrator = calibratorRef.current
+
+  /**
+   * Live gait, held in a ref rather than state on purpose. Consumers poll it
+   * (the auto-relocalization gate does, every couple of seconds); publishing
+   * cadence through React would re-render the map on every footfall for a
+   * value nothing draws.
+   */
+  const motionRef = useRef({ cadenceHz: 0, lastStepAt: 0 })
 
   const [state, setState] = useState(() => tracker.getState())
   const [heading, setHeadingState] = useState(
@@ -109,7 +119,10 @@ export function useLocalization(options = {}) {
     // Even when sensors are unavailable (desktop), we still run the render
     // loop so an anchored dot renders — it simply won't move on its own.
     if (result === 'granted') {
-      const pedometer = createPedometer(({ cadenceHz }) => tracker.step(cadenceHz))
+      const pedometer = createPedometer(({ cadenceHz }) => {
+        motionRef.current = { cadenceHz, lastStepAt: performance.now() }
+        tracker.step(cadenceHz)
+      })
       const compass = createCompass((mapBearing) => tracker.setHeading(mapBearing), {
         onRawCompass: (raw) => calibrator.addCompassSample(raw),
       })
@@ -181,6 +194,16 @@ export function useLocalization(options = {}) {
     []
   )
 
+  /**
+   * Current gait. Cadence decays to 0 once the steps stop, so a phone sitting
+   * still does not look like it is mid-stride to anything polling this.
+   */
+  const getMotion = useCallback(() => {
+    const { cadenceHz, lastStepAt } = motionRef.current
+    const sinceStep = performance.now() - lastStepAt
+    return { cadenceHz: sinceStep > 1500 ? 0 : cadenceHz, msSinceLastStep: sinceStep }
+  }, [])
+
   return {
     state,
     anchor,
@@ -194,5 +217,6 @@ export function useLocalization(options = {}) {
     calibrateHeading,
     /** Auto-learned map-north estimate; `usable` gates heading-up rotation. */
     heading,
+    getMotion,
   }
 }

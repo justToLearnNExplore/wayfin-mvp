@@ -61,8 +61,12 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-obsidian text-ivory">
-      {/* floor rail */}
-      <div className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
+      {/* Floor rail, stacked like the building: 3rd at the top, Ground at the
+          bottom. Reversed in CSS rather than by reversing the array, so the
+          index handed to go() stays the true floor index and cannot drift.
+          This also matches the rail on the route map, which was already
+          building-order. */}
+      <div className="absolute right-2 top-1/2 z-20 flex -translate-y-1/2 flex-col-reverse gap-1.5">
         {[...FLOORS].map((f, i) => (
           <button
             key={f.id}
@@ -80,7 +84,16 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
       </div>
 
       <div className="h-full w-full" style={{ perspective: 1200 }}>
-        <AnimatePresence initial={false} custom={direction} mode="popLayout">
+        {/* Default (sync) mode, deliberately not popLayout.
+            KNOWN ISSUE, only partly addressed here. Exiting floors are not
+            reliably unmounted: with popLayout the count grew strictly
+            (1,2,3,4,5 panels over five switches, 73 store cards left in the
+            DOM at opacity 0 — invisible but present and hit-testable). Sync
+            reclaims some (measured 1,2,2,3) but still leaks. The cause looks
+            to be framer-motion's exit not completing on a child that also has
+            drag="y"; proving that needs more than a mode swap. Harmless to
+            look at, wrong for memory and for stray tap targets. */}
+        <AnimatePresence initial={false} custom={direction}>
           <motion.div
             key={floor.id}
             custom={direction}

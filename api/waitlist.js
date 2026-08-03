@@ -105,7 +105,7 @@ export default async function handler(req, res) {
     // the moment it responds, so an un-awaited promise would simply be killed.
     // notifySignup swallows its own errors and is time-boxed, so this can
     // neither fail nor meaningfully delay a signup that is already stored.
-    if (isNew === 1) await notifySignup(entry, position)
+    const notified = isNew === 1 ? await notifySignup(entry, position) : 'skipped'
 
     return res.status(200).json({
       ok: true,
@@ -113,6 +113,11 @@ export default async function handler(req, res) {
       // list" instead of implying a second place was taken.
       added: isNew === 1,
       position,
+      // Reported so the operator can tell a working notification from a
+      // silently unconfigured one. Without this a 200 looks identical whether
+      // the email went out or RESEND_API_KEY was never set, and the only way
+      // to find out is to go and stare at an inbox.
+      notified,
     })
   } catch {
     return res.status(502).json({ error: 'store_failed' })

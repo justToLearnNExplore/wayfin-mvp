@@ -72,27 +72,41 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
             key={f.id}
             onClick={() => go(i)}
             aria-label={`Go to ${f.label}`}
-            className={`flex h-8 w-8 items-center justify-center rounded-full border text-[10px] font-bold transition-colors cursor-pointer ${
-              i === index
-                ? 'border-champagne bg-champagne/20 text-champagne-soft'
-                : 'border-ivory/15 text-ivory/40'
-            }`}
+            // 44x44 tap area with the pill drawn inside it. Apple's minimum
+            // is 44pt and these sit near the screen edge where thumbs are
+            // least accurate; growing the visible circle to match would make
+            // the rail dominate a map it is only meant to annotate.
+            className="flex h-11 w-11 items-center justify-center cursor-pointer"
           >
-            {f.short}
+            <span
+              className={`flex h-8 w-8 items-center justify-center rounded-full border text-[10px] font-bold transition-colors ${
+                i === index
+                  ? 'border-champagne bg-champagne/20 text-champagne-soft'
+                  : 'border-ivory/15 text-ivory/40'
+              }`}
+            >
+              {f.short}
+            </span>
           </button>
         ))}
       </div>
 
-      <div className="h-full w-full" style={{ perspective: 1200 }}>
-        {/* Default (sync) mode, deliberately not popLayout.
-            KNOWN ISSUE, only partly addressed here. Exiting floors are not
-            reliably unmounted: with popLayout the count grew strictly
-            (1,2,3,4,5 panels over five switches, 73 store cards left in the
-            DOM at opacity 0 — invisible but present and hit-testable). Sync
-            reclaims some (measured 1,2,2,3) but still leaks. The cause looks
-            to be framer-motion's exit not completing on a child that also has
-            drag="y"; proving that needs more than a mode swap. Harmless to
-            look at, wrong for memory and for stray tap targets. */}
+      {/* The drag gesture lives on this wrapper, NOT on the animated floor.
+          They used to be the same element, and framer-motion would not finish
+          the exit animation on a child that was also a drag target — so every
+          floor you left stayed mounted at opacity 0. Five switches left five
+          panels and 73 store cards in the DOM, invisible but still present
+          and still hit-testable. Separating the two lets exit complete and
+          the panel actually unmount, while the gesture behaves identically
+          because this wrapper fills the same box. */}
+      <motion.div
+        className="h-full w-full"
+        style={{ perspective: 1200 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={0.16}
+        onDragEnd={handleDragEnd}
+      >
         <AnimatePresence initial={false} custom={direction}>
           <motion.div
             key={floor.id}
@@ -102,10 +116,6 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
             animate="center"
             exit="exit"
             transition={{ duration: 0.65, ease: [0.25, 0.9, 0.3, 1] }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.16}
-            onDragEnd={handleDragEnd}
             className="absolute inset-0 flex flex-col justify-center px-4 pb-6"
             style={{ transformOrigin: '50% 50%' }}
           >
@@ -117,7 +127,10 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
               <em className="italic text-champagne-soft">Floor</em>
             </h2>
 
-            <div className="mx-auto mt-7 grid w-full max-w-[360px] grid-cols-4 gap-2.5 pr-6">
+            {/* Right padding clears the floor rail. The rail grew from a 32px pill
+                to a 44px tap target, and this was still sized for the old one —
+                cards in the last column ran underneath it. */}
+            <div className="mx-auto mt-7 grid w-full max-w-[360px] grid-cols-4 gap-2.5 pr-14">
               {featured(floor.stores).map((store, i) => (
                 <StoreCard key={`${floor.id}-${store.name}`} store={store} index={i} onTap={onStoreTap} />
               ))}
@@ -138,7 +151,7 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
             </p>
           </motion.div>
         </AnimatePresence>
-      </div>
+      </motion.div>
     </div>
   )
 }

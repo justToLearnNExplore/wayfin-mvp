@@ -22,11 +22,11 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       {...slideProps}
       animate={{ ...(slideProps.animate ?? {}), height }}
       transition={slideProps.transition ?? { duration: 0.45, ease: [0.2, 0.9, 0.25, 1] }}
-      className="absolute left-2.5 right-2.5 bottom-2.5 z-20 flex min-h-0 flex-col gap-3 overflow-hidden rounded-[26px] border border-champagne/35 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-xl"
+      className="absolute left-2.5 right-2.5 bottom-2.5 z-20 flex min-h-0 flex-col gap-3 overflow-hidden rounded-[26px] border border-champagne/35 p-5 pb-[max(1.25rem,var(--safe-bottom))] backdrop-blur-xl"
       style={{
         background: 'linear-gradient(180deg, rgba(23,20,30,.94), rgba(13,11,18,.97))',
         height,
-        maxHeight: 'calc(100dvh - max(12px, env(safe-area-inset-top)))',
+        maxHeight: 'calc(100dvh - max(12px, var(--safe-top)))',
       }}
     >
       <div className="flex items-center gap-2.5">
@@ -48,7 +48,7 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
           <button
             onClick={onClose}
             aria-label="Minimize wayFin"
-            className="ml-auto flex h-8 w-8 items-center justify-center rounded-full border border-ivory/15 text-ivory/60 cursor-pointer"
+            className="ml-auto flex h-11 w-11 items-center justify-center rounded-full border border-ivory/15 text-ivory/60 cursor-pointer"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M6 9l6 6 6-6" />

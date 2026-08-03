@@ -25,14 +25,14 @@ export default function AppBar({ onBack, onHome, context, action }) {
     <motion.header
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative z-30 flex flex-none items-center gap-2.5 border-b border-ivory/10 bg-obsidian/90 px-3 pb-2.5 pt-[max(0.7rem,env(safe-area-inset-top))] backdrop-blur-md"
+      className="relative z-30 flex flex-none items-center gap-2.5 border-b border-ivory/10 bg-obsidian/90 px-3 pb-2.5 pt-[max(0.7rem,var(--safe-top))] backdrop-blur-md"
     >
       {onBack && (
         <button
           type="button"
           onClick={onBack}
           aria-label="Go back"
-          className="flex h-10 w-10 flex-none items-center justify-center rounded-xl border border-ivory/15 text-ivory/70 cursor-pointer active:bg-ivory/10"
+          className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border border-ivory/15 text-ivory/70 cursor-pointer active:bg-ivory/10"
         >
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
@@ -47,7 +47,7 @@ export default function AppBar({ onBack, onHome, context, action }) {
           type="button"
           onClick={onHome}
           aria-label="Back to start"
-          className="font-display text-[17px] leading-none tracking-tight text-ivory cursor-pointer"
+          className="flex min-h-11 items-center font-display text-[17px] leading-none tracking-tight text-ivory cursor-pointer"
         >
           way<span className="italic text-champagne-soft">Fin</span>
         </button>

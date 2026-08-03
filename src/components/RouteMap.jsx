@@ -323,7 +323,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
       className="route-map absolute inset-0 z-50 flex flex-col overflow-hidden bg-obsidian text-ivory"
     >
       {/* header */}
-      <header className="route-map-header relative z-20 shrink-0 pt-7 text-center">
+      <header className="route-map-header relative z-20 shrink-0 pt-[calc(1.75rem+var(--safe-top))] text-center">
         <h2 className="font-display text-[30px] leading-none">
           way<em className="italic text-champagne-soft">Fin</em>
         </h2>
@@ -333,7 +333,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
         <button
           onClick={onClose}
           aria-label="Back to chat"
-          className="absolute right-4 top-6 flex h-10 w-10 items-center justify-center rounded-full border border-ivory/15 text-ivory/60 cursor-pointer"
+          className="absolute right-4 top-[calc(1.25rem+var(--safe-top))] flex h-11 w-11 items-center justify-center rounded-full border border-ivory/15 text-ivory/60 cursor-pointer"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path d="M18 6L6 18M6 6l12 12" />
@@ -516,7 +516,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
           </motion.div>
         </motion.div>
 
-        <div className="pointer-events-none absolute left-4 top-3 z-20 max-w-[155px] rounded-xl border border-ivory/15 bg-obsidian/80 px-3 py-2.5 shadow-xl backdrop-blur-md">
+        <div className="pointer-events-none absolute left-4 top-[var(--safe-tap-top)] z-20 max-w-[155px] rounded-xl border border-ivory/15 bg-obsidian/80 px-3 py-2.5 shadow-xl backdrop-blur-md">
           <p className="text-[9px] font-bold tracking-[0.2em] text-cyan">{manualPosition ? 'LANDMARK SET' : 'YOU ARE HERE'}</p>
           <p className="mt-0.5 truncate text-[12px] font-bold text-ivory">{currentPosition.name}</p>
           {nextNode && <p className="mt-1 text-[10px] text-ivory/55">Next · <span className="font-semibold text-champagne-soft">{nextNode.name}</span></p>}
@@ -526,7 +526,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
-            className="absolute left-4 top-[92px] z-30 w-[180px] rounded-xl border border-champagne/40 bg-obsidian-2/95 p-3 shadow-2xl backdrop-blur-xl"
+            className="absolute left-4 top-[calc(92px+var(--safe-top))] z-30 w-[180px] rounded-xl border border-champagne/40 bg-obsidian-2/95 p-3 shadow-2xl backdrop-blur-xl"
           >
             <p className="text-[9px] font-bold tracking-[0.18em] text-champagne-soft">STORE SELECTED</p>
             <p className="mt-1 font-display text-[18px] leading-tight text-ivory">{selectedStore.name}</p>
@@ -557,7 +557,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             onClick={onReAnchor}
-            className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/50 bg-obsidian/90 px-4 py-2.5 text-[11.5px] font-bold text-cyan shadow-xl backdrop-blur-md cursor-pointer active:bg-cyan/15"
+            className="absolute left-1/2 top-[var(--safe-tap-top)] z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/50 bg-obsidian/90 px-4 py-2.5 text-[11.5px] font-bold text-cyan shadow-xl backdrop-blur-md cursor-pointer active:bg-cyan/15"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
@@ -574,7 +574,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
             onClick={toggleAutoScan}
             aria-pressed={autoScan}
             aria-label={autoScan ? 'Turn off automatic camera re-centring' : 'Turn on automatic camera re-centring'}
-            className={`absolute right-3 top-[3.75rem] z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
+            className={`absolute right-3 top-[calc(3.75rem+var(--safe-top))] z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
               autoScan ? 'border-cyan/50 bg-cyan/15 text-cyan' : 'border-ivory/15 bg-obsidian/85 text-ivory/70'
             }`}
           >
@@ -611,7 +611,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="absolute left-1/2 top-3 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/40 bg-obsidian/95 py-2 pl-4 pr-2 shadow-xl backdrop-blur-md"
+              className="absolute left-1/2 top-[var(--safe-tap-top)] z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan/40 bg-obsidian/95 py-2 pl-4 pr-2 shadow-xl backdrop-blur-md"
             >
               <span className="text-[11.5px] font-bold text-ivory/85">
                 Near {auto.suggestion.label}?
@@ -625,7 +625,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
               <button
                 onClick={auto.dismissSuggestion}
                 aria-label="Dismiss"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-ivory/55 cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-full text-ivory/55 cursor-pointer"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
@@ -640,7 +640,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
             onClick={() => setHeadingUp((v) => !v)}
             aria-pressed={headingUp}
             aria-label={headingUp ? 'Switch to north-up map' : 'Switch to heading-up map'}
-            className={`absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
+            className={`absolute right-3 top-[var(--safe-tap-top)] z-20 flex h-11 w-11 items-center justify-center rounded-xl border backdrop-blur-md cursor-pointer ${
               headingUp ? 'border-cyan/50 bg-cyan/15 text-cyan' : 'border-ivory/15 bg-obsidian/85 text-ivory/70'
             }`}
           >
@@ -703,15 +703,19 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
                 disabled={!on}
                 aria-current={active ? 'true' : undefined}
                 aria-label={floorLabelOf(id)}
-                className={`flex h-10 w-10 items-center justify-center rounded-full border text-[11px] font-bold transition-colors ${
-                  active
-                    ? 'border-champagne bg-champagne/20 text-champagne-soft cursor-pointer'
-                    : on
-                      ? 'border-ivory/25 text-ivory/70 cursor-pointer'
-                      : 'border-ivory/10 text-ivory/25 cursor-not-allowed'
-                }`}
+                className={`flex h-11 w-11 items-center justify-center ${on ? 'cursor-pointer' : 'cursor-not-allowed'}`}
               >
-                {meta?.short ?? id}
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border text-[11px] font-bold transition-colors ${
+                    active
+                      ? 'border-champagne bg-champagne/20 text-champagne-soft'
+                      : on
+                        ? 'border-ivory/25 text-ivory/70'
+                        : 'border-ivory/10 text-ivory/25'
+                  }`}
+                >
+                  {meta?.short ?? id}
+                </span>
               </button>
             )
           })}

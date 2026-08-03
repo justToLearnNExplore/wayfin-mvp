@@ -15,6 +15,26 @@
   --font-body: "Manrope", sans-serif;
 }
 
+/**
+ * Safe-area tokens.
+ *
+ * Installed to the home screen with viewport-fit=cover, the page runs edge to
+ * edge and the top ~59px of an iPhone 15 is behind the Dynamic Island. Any
+ * control placed at a bare `top-3` lands underneath it and cannot be tapped.
+ *
+ * These exist so no component has to remember to write env() itself — the map
+ * overlays each did their own thing and several forgot, which is exactly how
+ * the close and back controls ended up unreachable on a notched phone.
+ *
+ * `--safe-tap-top` is the floor for anything interactive near the top edge: a
+ * comfortable gap below the island rather than flush against it.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-tap-top: max(0.75rem, env(safe-area-inset-top, 0px));
+}
+
 html, body, #root {
   height: 100%;
 }

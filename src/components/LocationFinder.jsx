@@ -270,7 +270,7 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
       aria-label="Find my location"
       className="fixed inset-0 z-[65] flex min-h-dvh flex-col overflow-y-auto bg-obsidian text-ivory"
     >
-      <header className="flex items-start justify-between px-5 pt-[max(2.5rem,env(safe-area-inset-top))]">
+      <header className="flex items-start justify-between px-5 pt-[max(2.5rem,var(--safe-top))]">
         <div>
           <h2 className="font-display text-[24px] leading-tight">Find my location</h2>
           <p className="mt-1 text-[10px] font-semibold tracking-[0.2em] text-champagne-soft">
@@ -287,7 +287,7 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
           </svg>
         </button>
       </header>
-      <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6">
+      <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col px-5 pb-[max(1.5rem,var(--safe-bottom))] pt-6">
         {children}
       </div>
     </motion.section>
@@ -598,7 +598,7 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
                   <button
                     key={name}
                     onClick={() => handleMatches(entry.matches, entry.name, 'text', 1, false)}
-                    className="rounded-full border border-champagne/45 bg-champagne/8 px-3.5 py-2 text-[12px] font-semibold cursor-pointer active:bg-champagne/25"
+                    className="flex min-h-11 items-center rounded-full border border-champagne/45 bg-champagne/8 px-3.5 text-[12px] font-semibold cursor-pointer active:bg-champagne/25"
                   >
                     {name}
                   </button>

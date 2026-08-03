@@ -804,7 +804,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
                   href={opt.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-full border border-magenta/50 bg-magenta/10 px-3.5 py-2 text-[12px] font-semibold text-ivory active:bg-magenta/25 transition-colors cursor-pointer"
+                  className="flex min-h-11 items-center rounded-full border border-magenta/50 bg-magenta/10 px-3.5 text-[12px] font-semibold text-ivory active:bg-magenta/25 transition-colors cursor-pointer"
                 >
                   {opt.label}
                 </a>
@@ -812,7 +812,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
                 <button
                   key={opt.id}
                   onClick={() => choose(opt)}
-                  className="rounded-full border border-champagne/45 bg-champagne/8 px-3.5 py-2 text-[12px] font-semibold text-ivory active:bg-champagne/25 transition-colors cursor-pointer"
+                  className="flex min-h-11 items-center rounded-full border border-champagne/45 bg-champagne/8 px-3.5 text-[12px] font-semibold text-ivory active:bg-champagne/25 transition-colors cursor-pointer"
                 >
                   {opt.label}
                 </button>
@@ -830,9 +830,9 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask wayFin anything…"
-          className="w-full bg-transparent text-[16px] text-ivory placeholder:text-ivory/40 outline-none"
+          className="min-h-11 w-full bg-transparent text-[16px] text-ivory placeholder:text-ivory/40 outline-none"
         />
-        <button type="submit" aria-label="Send" className="cursor-pointer">
+        <button type="submit" aria-label="Send" className="-mr-2 flex h-11 w-11 flex-none items-center justify-center cursor-pointer">
           <SendIcon />
         </button>
       </form>

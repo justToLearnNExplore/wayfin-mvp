@@ -129,7 +129,7 @@ export default function DestinationFinder({ onPick, onCancel, originName }) {
       aria-label="Choose a destination"
       className="fixed inset-0 z-[60] mx-auto flex min-h-dvh max-w-[430px] flex-col bg-obsidian text-ivory"
     >
-      <header className="flex flex-none items-center justify-between px-5 pt-[max(2.2rem,env(safe-area-inset-top))]">
+      <header className="flex flex-none items-center justify-between px-5 pt-[max(2.2rem,var(--safe-top))]">
         <div>
           <h2 className="font-display text-[21px]">{heading}</h2>
           <p className="mt-0.5 text-[10px] font-semibold tracking-[0.18em] text-champagne-soft">
@@ -173,7 +173,7 @@ export default function DestinationFinder({ onPick, onCancel, originName }) {
               onClick={() => setScreen(screen === 'voice' ? 'search' : 'voice')}
               aria-label="Speak the store name"
               aria-pressed={screen === 'voice'}
-              className={`flex h-9 w-9 flex-none items-center justify-center rounded-lg cursor-pointer ${
+              className={`flex h-11 w-11 flex-none items-center justify-center rounded-lg cursor-pointer ${
                 listening ? 'bg-cyan/20 text-cyan' : 'text-champagne-soft active:bg-ivory/10'
               }`}
             >
@@ -198,7 +198,7 @@ export default function DestinationFinder({ onPick, onCancel, originName }) {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[max(1.5rem,var(--safe-bottom))] pt-4">
         <AnimatePresence mode="popLayout">
           {results.length > 0 && (
             <motion.ul

@@ -102,7 +102,7 @@ export default function Scanner({ onMatch, onClose }) {
       aria-label="Smart product match"
       className="fixed inset-0 z-[60] flex min-h-dvh flex-col overflow-y-auto bg-obsidian text-ivory"
     >
-      <header className="flex items-center justify-between px-5 pt-[max(2.5rem,env(safe-area-inset-top))]">
+      <header className="flex items-center justify-between px-5 pt-[max(2.5rem,var(--safe-top))]">
         <div>
           <h2 className="font-display text-[21px]">Scan the product</h2>
           <p className="mt-0.5 text-[10px] font-semibold tracking-[0.18em] text-champagne-soft">
@@ -160,7 +160,7 @@ export default function Scanner({ onMatch, onClose }) {
         </AnimatePresence>
       </div>
 
-      <div className="mx-auto w-full max-w-[430px] px-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
+      <div className="mx-auto w-full max-w-[430px] px-5 pb-[max(1.5rem,var(--safe-bottom))] pt-5">
         {status === 'viewfinder' && (
           <>
             <p className="mx-auto max-w-[310px] text-center text-[12px] leading-relaxed text-ivory/60">

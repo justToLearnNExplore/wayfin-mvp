@@ -235,6 +235,33 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
   const mapScaleSpring = useSpring(mapScale, { stiffness: 220, damping: 26 })
   const [zoomLabel, setZoomLabel] = useState(1)
 
+  /**
+   * Shrink the stage to fit narrow phones.
+   *
+   * The plane is authored at a fixed PLANE_W and the store coordinates are
+   * multiplied into that space, so on a 320px handset the right-hand third of
+   * the mall sat outside the viewport — 39 elements past the edge, a cropped
+   * map, and a horizontal scroll on browsers less forgiving than this one.
+   * Scaling to the measured width means every screen sees the whole floor and
+   * the user's own zoom still multiplies on top of it.
+   */
+  const canvasRef = useRef(/** @type {HTMLDivElement | null} */ (null))
+  const [fitScale, setFitScale] = useState(1)
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return undefined
+    const measure = () => {
+      const width = el.clientWidth
+      if (!width) return
+      // A little breathing room so blocks at the edge are not flush to it.
+      setFitScale(Math.max(0.6, Math.min(1, width / (PLANE_W + 40))))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   // Which names are shown depends on zoom. With 38 stores on a floor, naming
   // them all at phone size is an unreadable smear, and naming none makes the
   // map look like it doesn't know the mall — so the overview carries only what
@@ -342,7 +369,11 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
       </header>
 
       {/* 3D viewport */}
-      <div className="route-map-canvas relative z-10 min-h-0 flex-1" style={{ perspective: 950, touchAction: 'none' }}>
+      <div
+        ref={canvasRef}
+        className="route-map-canvas relative z-10 min-h-0 flex-1 overflow-hidden"
+        style={{ perspective: 950, touchAction: 'none' }}
+      >
         <motion.div
           className="absolute inset-0"
           onPointerDown={(event) => {
@@ -386,7 +417,10 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
           }}
           style={{ x: mapX, y: mapY, scale: mapScaleSpring, transformStyle: 'preserve-3d', cursor: 'grab', touchAction: 'none' }}
         >
-          <motion.div className="absolute left-1/2 top-1/2 h-0 w-0" style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d' }}>
+          <motion.div
+            className="absolute left-1/2 top-1/2 h-0 w-0"
+            style={{ rotateX: srx, rotateZ: srz, transformStyle: 'preserve-3d', scale: fitScale }}
+          >
             <motion.div
               className="absolute"
               // In heading-up mode the plane counter-rotates against the
@@ -690,7 +724,9 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
         </div>
 
         {/* floor rail */}
-        <div className="route-map-floor-strip absolute right-3 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-1.5">
+        {/* Nudged below centre so it clears the two toggles stacked above it.
+            On a short screen (568px) a dead-centre rail collided with them. */}
+        <div className="route-map-floor-strip absolute right-3 top-[calc(50%+1.75rem)] z-20 flex -translate-y-1/2 flex-col gap-1.5">
           {FLOOR_RAIL.filter((id) => !id.startsWith('P') || routeFloors.includes(id)).map((id) => {
             const meta =
               FLOORS.find((f) => f.id === id) ?? PARKING_LEVELS.find((l) => l.id === id)

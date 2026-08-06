@@ -133,7 +133,13 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
   const dictate = () => {
     if (!voiceRef.current) voiceRef.current = createVoiceServices()
     const { recognizer } = voiceRef.current
-    if (!recognizer.isSupported) return
+    // Silence was the bug: an unsupported browser made this button do nothing
+    // at all, which is indistinguishable from broken. iOS Safari in particular
+    // is unreliable here, so say so and leave typing as the way through.
+    if (!recognizer.isSupported) {
+      push('bot', "Speech isn't available in this browser — type it instead and I'll understand the same.")
+      return
+    }
     if (listening) {
       recognizer.stop()
       return setListening(false)
@@ -143,7 +149,17 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     recognizer.start({
       onPartial: (t) => setInput(t),
       onResult: (t) => { setInput(t); setListening(false) },
-      onError: () => setListening(false),
+      onError: (reason) => {
+        setListening(false)
+        push(
+          'bot',
+          reason === 'denied'
+            ? 'Microphone access was blocked. You can type instead.'
+            : reason === 'no-speech'
+              ? "I didn't catch that — tap the mic and try again, or type it."
+              : "Speech didn't work just then. Typing works the same."
+        )
+      },
       onEnd: () => setListening(false),
     })
   }
@@ -175,7 +191,16 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           initialStore.discount ? ` · ${initialStore.discount}% off tonight` : ''
         }. Want the fastest route there?`
       )
-      setOptions([{ id: 'route', label: `Route me to ${initialStore.name}` }, ...idleOptions(true)])
+      // Tapping a store is a narrow question, so the answers stay narrow.
+      // Offering all six here buried the one thing the shopper came for.
+      setOptions(
+        [
+          { id: 'route', label: `Route me to ${initialStore.name}` },
+          { id: 'destination', label: 'Search any other store' },
+          getParking() && { id: 'car', label: "I'm leaving — my car? 🚗" },
+          { id: 'menu', label: 'Back to main menu' },
+        ].filter(Boolean)
+      )
     } else {
       const p = getParking()
       push(
@@ -343,6 +368,8 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       )
       return
     }
+
+    if (opt.id === 'menu') return goToMenu()
 
     if (opt.id === 'destination' || opt.id === 'destination:search') {
       trackEvent('destination_finder_opened')

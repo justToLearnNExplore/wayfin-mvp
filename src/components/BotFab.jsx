@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
  *
  * It used to be a bare logo, which said nothing about what tapping it did — a
  * mystery icon in an app whose whole promise is that anyone can use it without
- * being taught. It carries the word "Menu" now: for the audience this is for,
+ * being taught. It carries the word "Ask" now: for the audience this is for,
  * a word beats a mark every time.
  *
  * The pentagon stays as the brand cue, but the label is what the button is.
@@ -15,8 +15,8 @@ export default function BotFab({ onOpen }) {
     <motion.button
       layoutId="bot-shell"
       onClick={onOpen}
-      aria-label="Open the menu"
-      className="fixed bottom-5 right-4 z-50 flex min-h-14 items-center gap-2.5 rounded-full border border-champagne/50 pl-3.5 pr-5 cursor-pointer"
+      aria-label="Ask wayFin"
+      className="fixed bottom-5 right-4 z-50 flex min-h-14 items-center gap-2.5 rounded-full border border-champagne/50 pl-5 pr-3.5 cursor-pointer"
       style={{
         // Theme tokens, not literals — a hardcoded dark gradient here is what
         // left the chat tile black when the rest of the app went light.
@@ -25,6 +25,7 @@ export default function BotFab({ onOpen }) {
       }}
       whileTap={{ scale: 0.94 }}
     >
+      <span className="text-[14px] font-extrabold tracking-wide text-ivory">Ask</span>
       <motion.div
         className="h-7 w-7 flex-none"
         style={{
@@ -35,7 +36,6 @@ export default function BotFab({ onOpen }) {
         animate={{ rotate: [0, 6, -6, 0] }}
         transition={{ repeat: Infinity, duration: 5, ease: 'easeInOut' }}
       />
-      <span className="text-[14px] font-extrabold tracking-wide text-ivory">Menu</span>
     </motion.button>
   )
 }

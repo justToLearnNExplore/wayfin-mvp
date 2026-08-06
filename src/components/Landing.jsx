@@ -95,8 +95,8 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
 
       <motion.p
         {...rise(0.5)}
-        className="absolute top-[23%] z-10 w-full text-center text-[13px] text-ivory/65"
-        style={{ textShadow: '0 2px 12px rgba(11,10,15,.95), 0 0 4px rgba(11,10,15,.9)' }}
+        className="absolute top-[23%] z-10 w-full px-6 text-center text-[15px] text-ivory/85"
+        style={{ textShadow: 'var(--text-halo)' }}
       >
         The mall, already figured out.
       </motion.p>
@@ -139,7 +139,7 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
           animate={{ opacity: 1 }}
           transition={{ duration: 0.45 }}
         >
-          <BotSheet mode="full" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} onAnchor={onAnchor} />
+          <BotSheet mode="landing" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} onAnchor={onAnchor} />
         </motion.div>
       )}
     </div>

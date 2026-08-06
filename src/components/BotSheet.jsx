@@ -19,7 +19,9 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       }
     : {}
 
-  const height = full ? '100%' : expanded ? '78%' : landing ? '46%' : '58%'
+  // 72% on landing: a tile rather than a page, as asked, but tall enough to
+  // read the options without scrolling. 46% cut them off.
+  const height = full ? '100%' : expanded ? '88%' : landing ? '72%' : '58%'
 
   return (
     <motion.div

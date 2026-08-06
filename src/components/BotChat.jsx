@@ -164,17 +164,34 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [msgs, options])
 
+  /**
+   * Return to the six main options from anywhere.
+   *
+   * Every flow used to end by leaving the shopper deep in a conversation with
+   * no way out but a page reload — the single worst thing a wayfinding app can
+   * do to someone who took a wrong turn. Slots are cleared too, because
+   * starting over means starting over.
+   */
+  const goToMenu = () => {
+    trackEvent('chat_menu')
+    flow.current = { phase: 'idle', dest: null }
+    slots.current = emptySlots()
+    setInput('')
+    botSay('What would you like to do?', idleOptions(), 120)
+  }
+
   const idleOptions = (skipExplore = false) =>
     [
-      onEnter && { id: 'enter', label: 'Start' },
+      // Six, fixed, in the order the user asked for. "Start" is gone: it only
+      // ever dismissed a screen, which is not something worth a menu slot.
       { id: 'destination', label: 'Search any store' },
-      !skipExplore && { id: 'explore', label: 'See all stores' },
-      { id: 'friend', label: 'Find my friend' },
-      { id: 'scan', label: 'Scan a price tag' },
+      !skipExplore && { id: 'explore', label: 'Explore the mall' },
+      { id: 'friend', label: 'Locate your friend' },
       getParking()
-        ? { id: 'car', label: 'Take me to my car' }
-        : { id: 'parking', label: 'Remember where I parked' },
-      !hasJoinedWaitlist() && { id: 'waitlist', label: 'Get wayFin for my mall' },
+        ? { id: 'car', label: "I'm leaving — my car? 🚗" }
+        : { id: 'parking', label: 'Save my parking' },
+      { id: 'scan', label: 'Know more about this product' },
+      !hasJoinedWaitlist() && { id: 'waitlist', label: 'Join waitlist' },
     ].filter(Boolean)
 
   /**
@@ -769,6 +786,18 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
   return (
     <>
+      {/* Always available, never buried in a conversation. */}
+      <button
+        type="button"
+        onClick={goToMenu}
+        className="mb-1 flex min-h-11 w-fit items-center gap-1.5 self-start rounded-full border border-ivory/20 px-3.5 text-[12px] font-bold text-ivory/70 cursor-pointer active:bg-ivory/10"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true">
+          <path d="M15 18l-6-6 6-6" />
+        </svg>
+        Main menu
+      </button>
+
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1" style={{ overscrollBehavior: 'contain' }}>
         {msgs.map((m) =>
           m.from === 'bot' ? (

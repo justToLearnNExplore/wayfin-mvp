@@ -21,7 +21,7 @@ export default function StoreCard({ store, index, onTap }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 + index * 0.04, duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
       whileTap={{ scale: 0.93 }}
-      className="relative aspect-square cursor-pointer"
+      className="relative aspect-square overflow-hidden cursor-pointer"
       style={{ perspective: 600 }}
       aria-label={store.discount ? `${store.name}, ${store.discount} percent off` : store.name}
     >
@@ -33,7 +33,7 @@ export default function StoreCard({ store, index, onTap }) {
       >
         {/* front */}
         <div
-          className="absolute inset-0 flex items-center justify-center rounded-xl border border-champagne/30 bg-obsidian-2 p-1 text-center text-[10px] font-bold leading-tight text-ivory/90"
+          className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-xl border border-champagne/30 bg-obsidian-2 px-1.5 py-1 text-center text-[10px] font-bold leading-tight text-ivory/90 [overflow-wrap:anywhere] [hyphens:auto]"
           style={{ backfaceVisibility: 'hidden' }}
         >
           {store.name}

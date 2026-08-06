@@ -19,10 +19,17 @@ const rise = (delay) => ({
   transition: { delay, duration: 0.7, ease: [0.2, 0.8, 0.2, 1] },
 })
 
-/** How long the walk-in plays before the chat takes over. */
-const SPLASH_MS = 2000
+/**
+ * How long the walk-in plays before the chat takes over.
+ *
+ * Timed to the route line, not picked round: the path starts at 1s and draws
+ * for 2.2s, and the dot lands at its end. Cutting to the chat at 2s clipped
+ * the one thing the animation is actually about, which is the line arriving
+ * somewhere. 3.4s lets it finish and hold for a beat.
+ */
+const SPLASH_MS = 3400
 
-export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }) {
+export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor, skipSplash = false }) {
   /**
    * Two phases, never both at once.
    *
@@ -36,11 +43,14 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
    * hunting for a button, and a splash that waits for a tap is a splash people
    * stare at.
    */
-  const [phase, setPhase] = useState(/** @type {'splash' | 'chat'} */ ('splash'))
+  const [phase, setPhase] = useState(
+    /** @type {'splash' | 'chat'} */ (skipSplash ? 'chat' : 'splash')
+  )
   useEffect(() => {
+    if (skipSplash) return undefined
     const timer = setTimeout(() => setPhase('chat'), SPLASH_MS)
     return () => clearTimeout(timer)
-  }, [])
+  }, [skipSplash])
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-obsidian text-ivory">

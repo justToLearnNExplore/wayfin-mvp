@@ -19,6 +19,12 @@ export default function App() {
   const [activeRoute, setActiveRoute] = useState(null)
   /** Floor currently shown in the explorer, so the bar can label it. */
   const [exploreFloor, setExploreFloor] = useState(null)
+  /**
+   * True once the intro has played. Going back from the mall returns to the
+   * chat you left — replaying a three-second brand animation every time
+   * someone taps back is the opposite of getting them where they were.
+   */
+  const [splashSeen, setSplashSeen] = useState(false)
 
   const handleStoreTap = (store) => {
     trackEvent('store_viewed', { store: store.name })
@@ -43,6 +49,7 @@ export default function App() {
     setBotOpen(false)
     setSelected(null)
     setActiveRoute(null)
+    setSplashSeen(true)
     setScene('landing')
   }, [])
 
@@ -109,6 +116,7 @@ export default function App() {
             onRouteReady={handleRouteReady}
             onOpenRoute={setActiveRoute}
             onAnchor={handleAnchor}
+            skipSplash={splashSeen}
           />
         )}
         {scene === 'explore' && (

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { captureFrame, closeCamera, openRearCamera } from '../services/vision/camera.js'
 import { localizeFromImage } from '../services/vision/localizer.js'
 import { resolveLocationText } from '../services/localization/textResolver.js'
+import { parseIntent } from '../services/intentParser.js'
 import { CATALOGUE } from '../services/vision/catalogue.js'
 import { createVoiceServices } from '../services/voice/index.js'
 import { trackEvent } from '../lib/analytics.js'
@@ -190,19 +191,38 @@ export default function LocationFinder({ onLocated, onCancel, destinationName })
 
     recognizer.start({
       onPartial: (text) => setTranscript(text),
-      onResult: (text) => {
+      onResult: async (text) => {
         setTranscript(text)
-        setBusy(false)
+
+        // Local first: "I'm at H&M" resolves instantly and for free.
         const resolved = resolveLocationText(text)
-        if (resolved.status === 'none') {
-          setError(`Heard "${text}" — I couldn't match that to a place here.`)
-          return
+        // 'ambiguous' is a multi-floor landmark — the floor picker handles it
+        // locally, so it must not fall through to the parser.
+        if (resolved.status === 'match' || resolved.status === 'ambiguous' || resolved.status === 'suggestions') {
+          setBusy(false)
+          if (resolved.status === 'suggestions') {
+            setSuggestions(resolved.candidates?.map((c) => c.name) ?? [])
+            return setScreen('text')
+          }
+          return handleMatches(resolved.matches ?? [], resolved.entry?.name ?? text, 'voice', 0.9, false)
         }
-        if (resolved.status === 'suggestions') {
-          setSuggestions(resolved.candidates?.map((c) => c.name) ?? [])
-          return setScreen('text')
+
+        // Then the LLM. Voice used to stop at the offline matcher, which can
+        // only find ONE landmark in a phrase — so "I'm near H&M, my friend is
+        // near NIKE" left the friend slot empty and the bot asked again. That
+        // looked like poor speech recognition and was nothing of the kind:
+        // typing the same sentence has always worked, because typing goes
+        // through this parser and speech did not.
+        const parsed = await parseIntent(text)
+        setBusy(false)
+        const spoken = parsed?.origin ?? parsed?.destination ?? parsed?.friendLocation
+        if (spoken) {
+          const viaLlm = resolveLocationText(spoken)
+          if (viaLlm.status === 'match') {
+            return handleMatches(viaLlm.matches ?? [], viaLlm.entry?.name ?? spoken, 'voice', 0.9, false)
+          }
         }
-        handleMatches(resolved.matches ?? [], resolved.entry?.name ?? text, 'voice', 0.9, false)
+        setError(`Heard "${text}" — I couldn't match that to a place here.`)
       },
       onError: (reason) => {
         setBusy(false)

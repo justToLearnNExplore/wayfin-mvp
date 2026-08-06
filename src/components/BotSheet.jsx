@@ -35,9 +35,12 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
           : 'absolute left-2.5 right-2.5 bottom-2.5 z-20 flex min-h-0 flex-col gap-3 overflow-hidden rounded-[26px] border border-champagne/35 p-5 pb-[max(1.25rem,var(--safe-bottom))] backdrop-blur-xl'
       }
       style={{
+        // Theme tokens, not literals. This was a hardcoded dark gradient, so
+        // in light mode the page went cream and the tile stayed black — with
+        // near-black text on it. The single reason light mode looked broken.
         background: full
           ? 'var(--color-obsidian)'
-          : 'linear-gradient(180deg, rgba(23,20,30,.94), rgba(13,11,18,.97))',
+          : 'linear-gradient(180deg, var(--color-obsidian-2), var(--color-obsidian))',
         height,
         maxHeight: full ? '100%' : 'calc(100dvh - max(12px, var(--safe-top)))',
       }}

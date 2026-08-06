@@ -66,7 +66,7 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
       ))}
 
       {/* atrium ring — outer div positions, inner motion animates */}
-      <div className="absolute left-1/2 top-[10%] -translate-x-1/2">
+      <div className="absolute left-1/2 top-[21%] -translate-x-1/2">
         <motion.div
           className="rounded-full border border-champagne/50"
           style={{ width: 'min(300px, 78vw, 42dvh)', height: 'min(300px, 78vw, 42dvh)' }}
@@ -80,14 +80,14 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
 
       <motion.p
         {...rise(0.2)}
-        className="absolute top-[6%] w-full text-center text-[10px] font-semibold tracking-[0.42em] text-champagne-soft"
+        className="absolute top-[16%] w-full text-center text-[10px] font-semibold tracking-[0.42em] text-champagne-soft"
       >
         ORION MALL · BRIGADE GATEWAY
       </motion.p>
 
       <motion.h1
         {...rise(0.35)}
-        className="font-display absolute top-[12%] w-full text-center font-[390] leading-none tracking-tight"
+        className="font-display absolute top-[23%] w-full text-center font-[390] leading-none tracking-tight"
         style={{ fontSize: 'clamp(44px, 15vw, 64px)' }}
       >
         way<em className="italic text-champagne-soft">Fin</em>
@@ -95,21 +95,21 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
 
       <motion.p
         {...rise(0.5)}
-        className="absolute top-[23%] z-10 w-full px-6 text-center text-[15px] text-ivory/85"
+        className="absolute top-[34%] z-10 w-full px-6 text-center text-[15px] text-ivory/85"
         style={{ textShadow: 'var(--text-halo)' }}
       >
         The mall, already figured out.
       </motion.p>
 
       {/* walker sits center-right, anchored above the chat sheet so it never clips */}
-      <div className="absolute left-[54%] -translate-x-1/2" style={{ bottom: 'calc(46% + 14px)' }}>
+      <div className="absolute left-[54%] -translate-x-1/2" style={{ bottom: 'calc(30% + 14px)' }}>
         <motion.div {...rise(0.55)}>
           <FacetWalker />
         </motion.div>
       </div>
 
       {/* dotted route under the walker's feet */}
-      <div className="absolute w-full text-center" style={{ bottom: 'calc(46% + 4px)' }}>
+      <div className="absolute w-full text-center" style={{ bottom: 'calc(30% + 4px)' }}>
         <svg width="330" height="46" viewBox="0 0 330 46" className="max-w-[92%] overflow-visible">
           <motion.path
             d="M30,38 C110,10 200,44 290,16"

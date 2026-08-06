@@ -35,6 +35,25 @@
   --safe-tap-top: max(0.75rem, env(safe-area-inset-top, 0px));
 }
 
+/**
+ * Light theme.
+ *
+ * Dark stays the default — it is the identity everyone has seen. Light exists
+ * because malls are bright and much of the day is daylight, and gold-on-black
+ * is genuinely hard to read through a window at 2pm. It is a deliberate second
+ * palette rather than an inversion: the champagne darkens so it still carries
+ * contrast on a pale ground, and "ivory" becomes near-black text.
+ */
+:root[data-theme='light'] {
+  --color-obsidian: #FBF8F2;
+  --color-obsidian-2: #FFFFFF;
+  --color-ivory: #1A1720;
+  --color-champagne: #8A6D12;
+  --color-champagne-soft: #6F5610;
+  --color-cyan: #0E7C8A;
+  --color-magenta: #B02B62;
+}
+
 html, body, #root {
   height: 100%;
 }

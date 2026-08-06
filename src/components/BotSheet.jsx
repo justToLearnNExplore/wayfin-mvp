@@ -5,6 +5,11 @@ import BotChat from './BotChat.jsx'
 export default function BotSheet({ onClose, onEnter, store, lastVisited, onRouteReady, onOpenRoute, onAnchor, mode = 'landing' }) {
   const [expanded, setExpanded] = useState(false)
   const landing = mode === 'landing'
+  // 'full' owns the whole screen: no splash art behind it, nothing to share
+  // attention with. Users reported the old split screen — animation above,
+  // chat below — as unclear and attention-stealing, and they were right: two
+  // things asking to be looked at means neither gets read.
+  const full = mode === 'full'
 
   const slideProps = landing
     ? {
@@ -14,7 +19,7 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       }
     : {}
 
-  const height = expanded ? '78%' : landing ? '46%' : '58%'
+  const height = full ? '100%' : expanded ? '78%' : landing ? '46%' : '58%'
 
   return (
     <motion.div
@@ -22,11 +27,17 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
       {...slideProps}
       animate={{ ...(slideProps.animate ?? {}), height }}
       transition={slideProps.transition ?? { duration: 0.45, ease: [0.2, 0.9, 0.25, 1] }}
-      className="absolute left-2.5 right-2.5 bottom-2.5 z-20 flex min-h-0 flex-col gap-3 overflow-hidden rounded-[26px] border border-champagne/35 p-5 pb-[max(1.25rem,var(--safe-bottom))] backdrop-blur-xl"
+      className={
+        full
+          ? 'absolute inset-0 z-20 flex min-h-0 flex-col gap-3 overflow-hidden p-5 pt-[max(1.25rem,var(--safe-top))] pb-[max(1.25rem,var(--safe-bottom))]'
+          : 'absolute left-2.5 right-2.5 bottom-2.5 z-20 flex min-h-0 flex-col gap-3 overflow-hidden rounded-[26px] border border-champagne/35 p-5 pb-[max(1.25rem,var(--safe-bottom))] backdrop-blur-xl'
+      }
       style={{
-        background: 'linear-gradient(180deg, rgba(23,20,30,.94), rgba(13,11,18,.97))',
+        background: full
+          ? 'var(--color-obsidian)'
+          : 'linear-gradient(180deg, rgba(23,20,30,.94), rgba(13,11,18,.97))',
         height,
-        maxHeight: 'calc(100dvh - max(12px, var(--safe-top)))',
+        maxHeight: full ? '100%' : 'calc(100dvh - max(12px, var(--safe-top)))',
       }}
     >
       <div className="flex items-center gap-2.5">
@@ -63,7 +74,8 @@ export default function BotSheet({ onClose, onEnter, store, lastVisited, onRoute
         onRouteReady={onRouteReady}
         onOpenRoute={onOpenRoute}
         onAnchor={onAnchor}
-        onEnter={landing ? onEnter : undefined}
+        // Both entry modes carry it; only the in-mall overlay drops it.
+        onEnter={landing || full ? onEnter : undefined}
         onExpand={() => setExpanded(true)}
       />
     </motion.div>

@@ -1,5 +1,7 @@
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import FacetWalker from './FacetWalker.jsx'
+import ThemeToggle from './ThemeToggle.jsx'
 import BotSheet from './BotSheet.jsx'
 
 const STARS = [
@@ -17,9 +19,41 @@ const rise = (delay) => ({
   transition: { delay, duration: 0.7, ease: [0.2, 0.8, 0.2, 1] },
 })
 
+/** How long the walk-in plays before the chat takes over. */
+const SPLASH_MS = 2000
+
 export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }) {
+  /**
+   * Two phases, never both at once.
+   *
+   * The splash and the chat used to share the screen — animation on top, chat
+   * sheet across the bottom half. Real users called it attention-stealing and
+   * unclear, and that is exactly what it was: two things asking to be looked
+   * at, so neither gets read. Now the walk-in owns the screen, then hands over
+   * to a chat that owns the screen.
+   *
+   * It advances on its own. Someone who just scanned a QR while walking is not
+   * hunting for a button, and a splash that waits for a tap is a splash people
+   * stare at.
+   */
+  const [phase, setPhase] = useState(/** @type {'splash' | 'chat'} */ ('splash'))
+  useEffect(() => {
+    const timer = setTimeout(() => setPhase('chat'), SPLASH_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-obsidian text-ivory">
+      {/* Top-right on the first screen too — this is where a new visitor
+          decides the app is unreadable in daylight, so the fix has to be
+          visible before they give up. */}
+      <div className="absolute right-3 top-[var(--safe-tap-top)] z-40">
+        <ThemeToggle />
+      </div>
+
+      <AnimatePresence>
+      {phase === 'splash' && (
+      <motion.div key="splash" className="absolute inset-0" exit={{ opacity: 0, scale: 1.04 }} transition={{ duration: 0.5 }}>
       {/* constellation */}
       {STARS.map((s, i) => (
         <motion.i
@@ -94,7 +128,20 @@ export default function Landing({ onEnter, onRouteReady, onOpenRoute, onAnchor }
         </svg>
       </div>
 
-      <BotSheet mode="landing" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} onAnchor={onAnchor} />
+      </motion.div>
+      )}
+      </AnimatePresence>
+
+      {phase === 'chat' && (
+        <motion.div
+          className="absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.45 }}
+        >
+          <BotSheet mode="full" onEnter={onEnter} onRouteReady={onRouteReady} onOpenRoute={onOpenRoute} onAnchor={onAnchor} />
+        </motion.div>
+      )}
     </div>
   )
 }

@@ -166,15 +166,15 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
   const idleOptions = (skipExplore = false) =>
     [
-      onEnter && { id: 'enter', label: 'Enter the mall →' },
-      { id: 'destination', label: 'Take me somewhere →' },
-      !skipExplore && { id: 'explore', label: 'Explore the stores' },
-      { id: 'friend', label: 'Locate your friend' },
-      { id: 'scan', label: 'Check a price' },
+      onEnter && { id: 'enter', label: 'Start' },
+      { id: 'destination', label: 'Search any store' },
+      !skipExplore && { id: 'explore', label: 'See all stores' },
+      { id: 'friend', label: 'Find my friend' },
+      { id: 'scan', label: 'Scan a price tag' },
       getParking()
-        ? { id: 'car', label: "I'm leaving — where's my car? 🚗" }
-        : { id: 'parking', label: 'Save my parking' },
-      !hasJoinedWaitlist() && { id: 'waitlist', label: '✦ Join the waitlist' },
+        ? { id: 'car', label: 'Take me to my car' }
+        : { id: 'parking', label: 'Remember where I parked' },
+      !hasJoinedWaitlist() && { id: 'waitlist', label: 'Get wayFin for my mall' },
     ].filter(Boolean)
 
   /**
@@ -268,7 +268,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.phase = 'askCategory'
       botSay(
         'What are you in the mood for?',
-        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
+        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: 'Search by name' }]
       )
       return
     }
@@ -536,7 +536,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       flow.current.phase = 'askCategory'
       botSay(
         acknowledge(merged.slots, merged.filled),
-        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
+        [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: 'Search by name' }]
       )
       return true
     }
@@ -565,7 +565,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           flow.current.phase = 'askCategory'
           botSay(
             `Got it — you're near ${origin.name}. Where do you want to go?`,
-            [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
+            [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: 'Search by name' }]
           )
           return true
         }
@@ -695,7 +695,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         flow.current.phase = 'askCategory'
         botSay(
           acknowledge(slots.current, ['origin']),
-          [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: '🔎 Search all stores' }]
+          [...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })), { id: 'destination', label: 'Search by name' }]
         )
         return
       }

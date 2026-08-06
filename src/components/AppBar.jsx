@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import ThemeToggle from './ThemeToggle.jsx'
 
 /**
  * The one bar that appears on every screen.
@@ -64,6 +65,10 @@ export default function AppBar({ onBack, onHome, context, action }) {
       )}
 
       {action && <div className={context ? 'flex-none' : 'ml-auto flex-none'}>{action}</div>}
+
+      {/* Always last, so its position is the same on every screen — a control
+          people hunt for is a control they stop using. */}
+      <ThemeToggle className={context || action ? 'flex-none' : 'ml-auto'} />
     </motion.header>
   )
 }

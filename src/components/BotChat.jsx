@@ -293,6 +293,9 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     }
 
     if (opt.id === 'explore') {
+      trackEvent('explore_opened')
+      // Straight to the floors. "Explore the mall" should show the mall.
+      if (onEnter) return onEnter()
       flow.current.phase = 'askCategory'
       botSay(
         'What are you in the mood for?',
@@ -312,23 +315,8 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
       return
     }
 
-    if (opt.id === 'destination') {
+    if (opt.id === 'destination' || opt.id === 'destination:search') {
       trackEvent('destination_finder_opened')
-      // Ask the mood first. Someone who already knows the shop taps "Search by
-      // name" and is straight into the type-ahead; someone who only knows they
-      // want lunch gets a way in that does not require knowing a brand.
-      botSay(
-        'What are you in the mood for?',
-        [
-          ...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })),
-          { id: 'destination:search', label: 'Search by name' },
-        ],
-        200
-      )
-      return
-    }
-
-    if (opt.id === 'destination:search') {
       setChoosingDest(true)
       return
     }

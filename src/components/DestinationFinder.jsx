@@ -234,7 +234,7 @@ export default function DestinationFinder({ onPick, onCancel, originName }) {
               </p>
             )}
             <p className="mb-2.5 text-[10px] font-bold tracking-[0.18em] text-ivory/40">
-              BROWSE BY CATEGORY
+              WHAT ARE YOU IN THE MOOD FOR?
             </p>
             <div className="flex flex-wrap gap-2">
               {categories.map(({ category: name, count }) => (

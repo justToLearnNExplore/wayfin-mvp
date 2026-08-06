@@ -177,7 +177,18 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
     flow.current = { phase: 'idle', dest: null }
     slots.current = emptySlots()
     setInput('')
-    botSay('What would you like to do?', idleOptions(), 120)
+    // Wipe the conversation rather than appending to it. Going "back to the
+    // menu" and finding the whole previous attempt still sitting above you is
+    // not going back — and it made the bot repeat the same prompt each time.
+    setMsgs([{ id: ++msgSeq, from: 'bot', text: greeting() }])
+    setOptions(idleOptions())
+  }
+
+  const greeting = () => {
+    const p = getParking()
+    return p
+      ? `Welcome back — your car is at ${p.level} · Zone ${p.zone}. What can I help with?`
+      : "You're at Orion Mall. What can I help with?"
   }
 
   const idleOptions = (skipExplore = false) =>
@@ -303,6 +314,21 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
     if (opt.id === 'destination') {
       trackEvent('destination_finder_opened')
+      // Ask the mood first. Someone who already knows the shop taps "Search by
+      // name" and is straight into the type-ahead; someone who only knows they
+      // want lunch gets a way in that does not require knowing a brand.
+      botSay(
+        'What are you in the mood for?',
+        [
+          ...CATEGORIES.map((c) => ({ id: `cat:${c}`, label: c })),
+          { id: 'destination:search', label: 'Search by name' },
+        ],
+        200
+      )
+      return
+    }
+
+    if (opt.id === 'destination:search') {
       setChoosingDest(true)
       return
     }
@@ -786,7 +812,9 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
 
   return (
     <>
-      {/* Always available, never buried in a conversation. */}
+      {/* Shown only once the shopper is somewhere — on the menu itself there
+          is nothing to go back to, and offering it there is just noise. */}
+      {msgs.length > 1 && (
       <button
         type="button"
         onClick={goToMenu}
@@ -797,6 +825,7 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
         </svg>
         Main menu
       </button>
+      )}
 
       <div ref={scrollRef} className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-1" style={{ overscrollBehavior: 'contain' }}>
         {msgs.map((m) =>

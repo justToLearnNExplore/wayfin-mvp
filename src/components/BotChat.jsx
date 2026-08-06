@@ -14,6 +14,7 @@ import WaitlistSheet, { JOINED_KEY } from './WaitlistSheet.jsx'
 import LocationFinder from './LocationFinder.jsx'
 import DestinationFinder from './DestinationFinder.jsx'
 import { SendIcon } from './icons.jsx'
+import { createVoiceServices } from '../services/voice/index.js'
 
 const hasJoinedWaitlist = () => {
   try {
@@ -120,6 +121,34 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
    */
   const slots = useRef(emptySlots())
   const scrollRef = useRef(null)
+  const voiceRef = useRef(/** @type {ReturnType<typeof createVoiceServices> | null} */ (null))
+  const [listening, setListening] = useState(false)
+
+  /**
+   * Dictate into the input rather than sending straight off.
+   *
+   * Brand names are exactly what speech recognition gets wrong, so the user
+   * sees the transcript in the box and can fix it before anything acts on it.
+   */
+  const dictate = () => {
+    if (!voiceRef.current) voiceRef.current = createVoiceServices()
+    const { recognizer } = voiceRef.current
+    if (!recognizer.isSupported) return
+    if (listening) {
+      recognizer.stop()
+      return setListening(false)
+    }
+    setListening(true)
+    trackEvent('chat_voice_start')
+    recognizer.start({
+      onPartial: (t) => setInput(t),
+      onResult: (t) => { setInput(t); setListening(false) },
+      onError: () => setListening(false),
+      onEnd: () => setListening(false),
+    })
+  }
+
+  useEffect(() => () => voiceRef.current?.recognizer.stop(), [])
 
   const push = (from, text) =>
     setMsgs((m) => [...m, { id: ++msgSeq, from, text }])
@@ -878,6 +907,20 @@ export default function BotChat({ initialStore, lastVisited, onRouteReady, onOpe
           placeholder="Ask wayFin anything…"
           className="min-h-11 w-full bg-transparent text-[16px] text-ivory placeholder:text-ivory/40 outline-none"
         />
+        <button
+          type="button"
+          onClick={dictate}
+          aria-label={listening ? 'Stop listening' : 'Speak instead of typing'}
+          aria-pressed={listening}
+          className={`flex h-11 w-11 flex-none items-center justify-center rounded-full cursor-pointer ${
+            listening ? 'bg-cyan/20 text-cyan' : 'text-champagne-soft active:bg-ivory/10'
+          }`}
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
+          </svg>
+        </button>
         <button type="submit" aria-label="Send" className="-mr-2 flex h-11 w-11 flex-none items-center justify-center cursor-pointer">
           <SendIcon />
         </button>

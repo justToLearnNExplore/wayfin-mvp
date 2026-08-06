@@ -147,7 +147,9 @@ export default function FloorExplorer({ onStoreTap, onFloorChange, onSeeAll }) {
             )}
 
             <p className="mt-5 text-center text-[11px] text-ivory/40">
-              {index < FLOORS.length - 1 ? 'Drag up for the next floor' : 'Top of the mall'} · Tap a store to ask wayFin
+              Tap any store to get directions to it
+              <br />
+              {index < FLOORS.length - 1 ? 'Swipe up for the next floor' : 'Top of the mall'}
             </p>
           </motion.div>
         </AnimatePresence>

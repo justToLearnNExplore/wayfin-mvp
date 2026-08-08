@@ -25,6 +25,14 @@ export default function App() {
    * someone taps back is the opposite of getting them where they were.
    */
   const [splashSeen, setSplashSeen] = useState(false)
+  /**
+   * Bumped to remount the chat fresh.
+   *
+   * Finishing a route should leave the shopper at the six options ready for
+   * the next errand — not in the conversation that produced the last one,
+   * offering both "back to main menu" and the menu itself.
+   */
+  const [chatKey, setChatKey] = useState(0)
 
   const handleStoreTap = (store) => {
     trackEvent('store_viewed', { store: store.name })
@@ -141,6 +149,7 @@ export default function App() {
                     onClick={closeBot}
                   />
                   <BotSheet
+                    key={chatKey}
                     mode="overlay"
                     store={selected}
                     lastVisited={lastVisited}
@@ -167,7 +176,12 @@ export default function App() {
               onAnchor={handleAnchor}
               getMotion={localization.getMotion}
               onReAnchor={() => setReAnchoring(true)}
-              onClose={() => setActiveRoute(null)}
+              onClose={() => {
+                setActiveRoute(null)
+                setSelected(null)
+                setChatKey((k) => k + 1)
+                setBotOpen(true)
+              }}
             />
           )}
         </AnimatePresence>

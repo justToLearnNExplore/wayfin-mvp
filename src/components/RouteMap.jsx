@@ -845,7 +845,7 @@ export default function RouteMap({ route, onClose, live, isTracking, onStartTrac
                 : 'border-champagne/60 bg-champagne/10 text-champagne-soft active:bg-champagne/25'
             }`}
           >
-            {last ? 'DONE' : liveActive ? 'SKIP' : 'NEXT'}
+            {last ? 'DONE' : 'NEXT'}
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
               <path d="M9 6l6 6-6 6" />
             </svg>
